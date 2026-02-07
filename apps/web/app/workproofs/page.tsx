@@ -32,9 +32,9 @@ export default function WorkProofsPage() {
     const [simulateTxState, setSimulateTxState] = useState<TxState>('idle');
     const [simulateError, setSimulateError] = useState('');
 
-    // Fetch on-chain events
+    // Fetch proofs - try API first (indexed data), then fallback to on-chain
     const fetchProofs = useCallback(async () => {
-        if (!publicClient || !address || !CONTRACTS.WorkProof) {
+        if (!address || !CONTRACTS.WorkProof) {
             setLoading(false);
             return;
         }
@@ -42,40 +42,80 @@ export default function WorkProofsPage() {
         try {
             setLoading(true);
 
-            // Get WorkProofSubmitted events for this worker
-            const logs = await publicClient.getLogs({
-                address: CONTRACTS.WorkProof as `0x${string}`,
-                event: parseAbiItem('event WorkProofSubmitted(uint256 indexed proofId, address indexed worker, bytes32 proofHash, uint256 workUnits, uint256 earnedAmount, uint256 timestamp)'),
-                args: {
-                    worker: address,
-                },
-                fromBlock: 0n,
-                toBlock: 'latest',
-            });
+            // First, try fetching from indexed API (more reliable)
+            try {
+                const apiResponse = await fetch(`${API_URL}/workproof/worker/${address}?limit=100`);
+                if (apiResponse.ok) {
+                    const apiProofs = await apiResponse.json();
+                    if (apiProofs && apiProofs.length > 0) {
+                        const parsedProofs: WorkProofEvent[] = apiProofs.map((p: any) => ({
+                            proofId: BigInt(p.proof_id),
+                            worker: p.worker,
+                            proofHash: '',
+                            workUnits: BigInt(p.work_units),
+                            earnedAmount: BigInt(p.earned_amount),
+                            timestamp: BigInt(p.timestamp),
+                            blockNumber: 0n,
+                            txHash: p.tx_hash || '',
+                        }));
 
-            const parsedProofs: WorkProofEvent[] = logs.map((log) => ({
-                proofId: log.args.proofId!,
-                worker: log.args.worker!,
-                proofHash: log.args.proofHash!,
-                workUnits: log.args.workUnits!,
-                earnedAmount: log.args.earnedAmount!,
-                timestamp: log.args.timestamp!,
-                blockNumber: log.blockNumber,
-                txHash: log.transactionHash,
-            }));
+                        parsedProofs.sort((a, b) => Number(b.timestamp - a.timestamp));
+                        setProofs(parsedProofs);
 
-            // Sort newest first
-            parsedProofs.sort((a, b) => Number(b.timestamp - a.timestamp));
-            setProofs(parsedProofs);
+                        const totalWorkUnits = parsedProofs.reduce((sum, p) => sum + p.workUnits, 0n);
+                        const totalEarned = parsedProofs.reduce((sum, p) => sum + p.earnedAmount, 0n);
+                        setStats({
+                            totalProofs: BigInt(parsedProofs.length),
+                            totalWorkUnits,
+                            totalEarned,
+                        });
 
-            // Calculate stats
-            const totalWorkUnits = parsedProofs.reduce((sum, p) => sum + p.workUnits, 0n);
-            const totalEarned = parsedProofs.reduce((sum, p) => sum + p.earnedAmount, 0n);
-            setStats({
-                totalProofs: BigInt(parsedProofs.length),
-                totalWorkUnits,
-                totalEarned,
-            });
+                        setLoading(false);
+                        return; // Success from API
+                    }
+                }
+            } catch (apiError) {
+                console.log('API fetch failed, falling back to on-chain:', apiError);
+            }
+
+            // Fallback: Try on-chain with limited block range
+            if (publicClient) {
+                const currentBlock = await publicClient.getBlockNumber();
+                // Query last 2000 blocks to avoid RPC limits (most RPCs allow 2000-10000)
+                const fromBlock = currentBlock > 2000n ? currentBlock - 2000n : 0n;
+
+                const logs = await publicClient.getLogs({
+                    address: CONTRACTS.WorkProof as `0x${string}`,
+                    event: parseAbiItem('event WorkProofSubmitted(uint256 indexed proofId, address indexed worker, bytes32 proofHash, uint256 workUnits, uint256 earnedAmount, uint256 timestamp)'),
+                    args: {
+                        worker: address,
+                    },
+                    fromBlock: fromBlock,
+                    toBlock: 'latest',
+                });
+
+                const parsedProofs: WorkProofEvent[] = logs.map((log) => ({
+                    proofId: log.args.proofId!,
+                    worker: log.args.worker!,
+                    proofHash: log.args.proofHash!,
+                    workUnits: log.args.workUnits!,
+                    earnedAmount: log.args.earnedAmount!,
+                    timestamp: log.args.timestamp!,
+                    blockNumber: log.blockNumber,
+                    txHash: log.transactionHash,
+                }));
+
+                parsedProofs.sort((a, b) => Number(b.timestamp - a.timestamp));
+                setProofs(parsedProofs);
+
+                const totalWorkUnits = parsedProofs.reduce((sum, p) => sum + p.workUnits, 0n);
+                const totalEarned = parsedProofs.reduce((sum, p) => sum + p.earnedAmount, 0n);
+                setStats({
+                    totalProofs: BigInt(parsedProofs.length),
+                    totalWorkUnits,
+                    totalEarned,
+                });
+            }
 
         } catch (error) {
             console.error('Failed to fetch proofs:', error);

@@ -8,7 +8,7 @@ Tables:
 - indexer_state: Block tracking for indexer
 """
 
-from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Boolean, DateTime, Text, Index
+from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Boolean, DateTime, Text, Index, Float, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -95,6 +95,77 @@ class IndexerState(Base):
     chain_id = Column(Integer, nullable=False, unique=True)
     last_processed_block = Column(BigInteger, nullable=False, default=0)
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# === AI Feature Tables ===
+
+class FraudSignal(Base):
+    """Fraud anomaly detection results."""
+    __tablename__ = "fraud_signals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    worker = Column(String(42), nullable=False, index=True)
+    anomaly_score = Column(Integer, nullable=False)
+    risk_level = Column(String(20), nullable=False)
+    reasons = Column(JSON, nullable=True)
+    signals = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class WorkProofFlag(Base):
+    """WorkProof integrity flags."""
+    __tablename__ = "workproof_flags"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    worker = Column(String(42), nullable=False, index=True)
+    flag_score = Column(Integer, nullable=False)
+    risk_level = Column(String(20), nullable=False)
+    flags = Column(JSON, nullable=True)
+    event_ids = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RiskAlert(Base):
+    """Default early warning alerts."""
+    __tablename__ = "risk_alerts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    worker = Column(String(42), nullable=False, index=True)
+    risk_score = Column(Integer, nullable=False)
+    risk_level = Column(String(20), nullable=False)
+    default_risk_7d = Column(Float, nullable=True)
+    default_risk_14d = Column(Float, nullable=True)
+    reasons = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class OfferHistory(Base):
+    """Credit offer history for fairness auditing."""
+    __tablename__ = "offer_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    worker = Column(String(42), nullable=False, index=True)
+    
+    # Attestation fields
+    credit_limit = Column(String(78), nullable=False)
+    apr_bps = Column(Integer, nullable=False)
+    tenure_days = Column(Integer, nullable=False)
+    pd = Column(Integer, nullable=False)
+    trust_score = Column(Integer, nullable=False)
+    fraud_flags = Column(Integer, nullable=False, default=0)
+    
+    # AI signal summaries
+    risk_score = Column(Integer, nullable=True)
+    forecast_14d = Column(Float, nullable=True)
+    anomaly_score = Column(Integer, nullable=True)
+    integrity_score = Column(Integer, nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('ix_offer_history_worker_date', 'worker', 'created_at'),
+    )
 
 
 # Engine and session factory (lazy init)

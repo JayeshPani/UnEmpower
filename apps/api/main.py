@@ -15,6 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from settings import validate_settings_on_startup, get_settings
 from database import init_db, check_db_connection
 from routers import ai, workproof, payout, events
+from routers import stats, forecast, fraud_router, integrity, alerts, coach_router, audit
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -112,6 +113,15 @@ app.include_router(ai.router)
 app.include_router(workproof.router)
 app.include_router(payout.router)
 app.include_router(events.router)
+
+# AI Feature Pack routers
+app.include_router(stats.router)
+app.include_router(forecast.router)
+app.include_router(fraud_router.router)
+app.include_router(integrity.router)
+app.include_router(alerts.router)
+app.include_router(coach_router.router)
+app.include_router(audit.router)
 
 if settings.DEMO_MODE:
     from routers import demo

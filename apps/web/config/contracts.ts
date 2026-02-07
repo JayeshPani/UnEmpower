@@ -18,6 +18,10 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000
 
 export const IS_DEMO_ADMIN = process.env.NEXT_PUBLIC_DEMO_ADMIN === 'true';
 
+// Block number when contracts were deployed (for efficient log fetching)
+// This should be set to the block where WorkProof was deployed on Sepolia
+export const DEPLOYMENT_BLOCK = BigInt(process.env.NEXT_PUBLIC_DEPLOYMENT_BLOCK || '7699000');
+
 /**
  * Validate that all required environment variables are set
  */
