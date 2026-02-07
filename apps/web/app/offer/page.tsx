@@ -123,30 +123,23 @@ export default function OfferPage() {
     };
 
     return (
-        <div className="container">
+        <div className="container synapse-page">
             <Navigation />
 
             <NetworkGuard>
-                <main style={{ padding: '40px 0' }}>
-                    <h1 style={{ fontSize: 32, marginBottom: 32 }}>Get Your Credit Offer</h1>
+                <main>
+                    <h1 className="synapse-page-title" style={{ marginBottom: 32 }}>Get Your Credit Offer</h1>
 
                     {!offer ? (
-                        <div className="card" style={{ maxWidth: 600, margin: '0 auto', textAlign: 'center', padding: 60 }}>
-                            <div style={{ fontSize: 64, marginBottom: 24 }}>🤖</div>
-                            <h2 style={{ marginBottom: 16 }}>AI-Powered Credit Analysis</h2>
-                            <p style={{ color: 'var(--text-secondary)', marginBottom: 32 }}>
+                        <div className="card synapse-ai-card" style={{ maxWidth: 600, margin: '0 auto' }}>
+                            <div className="synapse-ai-card-icon">🤖</div>
+                            <h2 className="synapse-ai-card-title">AI-Powered Credit Analysis</h2>
+                            <p className="synapse-ai-card-text">
                                 Our AI will analyze your on-chain work history and generate a personalized credit offer.
                             </p>
 
                             {error && (
-                                <div style={{
-                                    background: 'rgba(239, 68, 68, 0.1)',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    borderRadius: 8,
-                                    padding: 16,
-                                    marginBottom: 24,
-                                    color: 'var(--error)'
-                                }}>
+                                <div className="synapse-alert synapse-alert-error" style={{ marginBottom: 24 }}>
                                     {error}
                                 </div>
                             )}
@@ -164,21 +157,23 @@ export default function OfferPage() {
                         <div style={{ maxWidth: 700, margin: '0 auto' }}>
                             <div className="card" style={{ marginBottom: 24 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                                    <h2>Your Credit Offer</h2>
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 8,
-                                        color: expired ? 'var(--error)' : 'var(--warning)',
-                                        animation: expired ? 'none' : 'pulse 1s infinite',
-                                    }}>
+                                    <h2 className="synapse-heading">Your Credit Offer</h2>
+                                    <div
+                                        className={!expired ? 'synapse-pulse' : ''}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 8,
+                                            color: expired ? 'var(--error)' : 'var(--warning)',
+                                        }}
+                                    >
                                         ⏱️ {expired ? 'EXPIRED' : `Expires in ${timeLeft}`}
                                     </div>
                                 </div>
 
                                 <div className="grid grid-3" style={{ marginBottom: 32 }}>
                                     <div className="stat">
-                                        <div className="stat-value" style={{ color: 'var(--success)' }}>
+                                        <div className="stat-value" style={{ color: 'var(--synapse-emerald)' }}>
                                             ${formatUSDC(BigInt(offer.attestation.creditLimit))}
                                         </div>
                                         <div className="stat-label">Credit Limit</div>
@@ -230,10 +225,9 @@ export default function OfferPage() {
                             </div>
 
                             <div className="card">
-                                <h3 style={{ marginBottom: 16 }}>AI Explanation</h3>
-                                <pre style={{
+                                <h3 className="synapse-heading" style={{ marginBottom: 16 }}>AI Explanation</h3>
+                                <pre className="synapse-body" style={{
                                     whiteSpace: 'pre-wrap',
-                                    color: 'var(--text-secondary)',
                                     fontFamily: 'inherit',
                                     lineHeight: 1.6,
                                     margin: 0,
@@ -243,8 +237,8 @@ export default function OfferPage() {
                             </div>
 
                             <div className="card" style={{ marginTop: 24 }}>
-                                <h3 style={{ marginBottom: 16 }}>Technical Details</h3>
-                                <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                                <h3 className="synapse-heading" style={{ marginBottom: 16 }}>Technical Details</h3>
+                                <div className="synapse-mono">
                                     <p><strong>Signer:</strong> {offer.signer}</p>
                                     <p style={{ marginTop: 8 }}><strong>Nonce:</strong> {offer.attestation.nonce}</p>
                                     <p style={{ marginTop: 8 }}><strong>Chain ID:</strong> {CHAIN_ID}</p>
@@ -257,13 +251,6 @@ export default function OfferPage() {
                     )}
                 </main>
             </NetworkGuard>
-
-            <style jsx>{`
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.6; }
-                }
-            `}</style>
         </div>
     );
 }

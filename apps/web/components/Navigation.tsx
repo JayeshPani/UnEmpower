@@ -75,7 +75,17 @@ export function Navigation() {
           <button
             type="button"
             className="synapse-nav-connect"
-            onClick={() => connect({ connector: connectors[0] })}
+            onClick={() => {
+              if (connectors.length > 0) {
+                connect({ connector: connectors[0] }, {
+                  onError: (err) => console.error('Connection failed:', err)
+                });
+              } else {
+                console.error('No connectors found. Is a wallet installed?');
+                // Fallback or alert could go here
+                alert('No wallet connector found. Please install MetaMask or similar.');
+              }
+            }}
           >
             Connect Wallet
           </button>

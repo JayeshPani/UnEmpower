@@ -104,7 +104,17 @@ export default function Home() {
             </div>
           ) : (
             <div className="synapse-hero-actions synapse-stagger-5">
-              <ShinyBorderButton onClick={() => connect({ connector: connectors[0] })}>
+              <ShinyBorderButton
+                onClick={() => {
+                  if (connectors.length > 0) {
+                    connect({ connector: connectors[0] }, {
+                      onError: (err) => console.error('Connection failed:', err)
+                    });
+                  } else {
+                    alert('No wallet connector found. Please install MetaMask.');
+                  }
+                }}
+              >
                 Connect Wallet
               </ShinyBorderButton>
               <Link href="/register" className="synapse-hero-link">

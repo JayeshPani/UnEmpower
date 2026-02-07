@@ -61,22 +61,24 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="container">
+        <div className="container synapse-page">
             <Navigation />
 
             <NetworkGuard>
-                <main style={{ padding: '40px 0' }}>
+                <main>
                     <div className="card" style={{ maxWidth: 500, margin: '0 auto' }}>
-                        <h1 style={{ fontSize: 28, marginBottom: 8 }}>Register as Worker</h1>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: 32 }}>
+                        <h1 className="synapse-heading" style={{ fontSize: 28, marginBottom: 8 }}>
+                            Register as Worker
+                        </h1>
+                        <p className="synapse-body" style={{ marginBottom: 32 }}>
                             Register on the blockchain to start building your work history.
                         </p>
 
                         {isRegistered ? (
-                            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                                <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-                                <h2 style={{ color: 'var(--success)' }}>Already Registered!</h2>
-                                <p style={{ color: 'var(--text-secondary)', marginTop: 8 }}>
+                            <div className="synapse-success-state">
+                                <div className="icon">✅</div>
+                                <h2>Already Registered!</h2>
+                                <p>
                                     Welcome back, <strong>{registeredName}</strong>!
                                 </p>
                                 <a href="/workproofs" className="btn btn-primary" style={{ marginTop: 24, display: 'inline-block' }}>
@@ -127,12 +129,12 @@ export default function RegisterPage() {
                                 />
 
                                 {!CONTRACTS.WorkerRegistry && (
-                                    <p style={{ fontSize: 12, color: 'var(--error)', marginTop: 16, textAlign: 'center' }}>
+                                    <p className="synapse-alert synapse-alert-error" style={{ marginTop: 16, textAlign: 'center', fontSize: 12 }}>
                                         ⚠️ Contract addresses not configured. Please set environment variables.
                                     </p>
                                 )}
 
-                                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 16, textAlign: 'center' }}>
+                                <p className="synapse-body" style={{ fontSize: 12, marginTop: 16, textAlign: 'center' }}>
                                     This will create a transaction on the blockchain.
                                 </p>
                             </>

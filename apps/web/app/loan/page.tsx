@@ -235,19 +235,19 @@ export default function LoanPage() {
     const needsApproval = repayAmountBigInt > allowance;
 
     return (
-        <div className="container">
+        <div className="container synapse-page">
             <Navigation />
 
             <NetworkGuard>
-                <main style={{ padding: '40px 0' }}>
-                    <h1 style={{ fontSize: 32, marginBottom: 32 }}>Loan Management</h1>
+                <main>
+                    <h1 className="synapse-page-title" style={{ marginBottom: 32 }}>Loan Management</h1>
 
                     {/* USDC Balance */}
                     <div className="card" style={{ marginBottom: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                                <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Your mUSDC Balance</div>
-                                <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>
+                                <div className="synapse-body" style={{ fontSize: 14 }}>Your mUSDC Balance</div>
+                                <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4, color: '#fff' }}>
                                     ${formatUSDC(usdcBalance as bigint || 0n)}
                                 </div>
                             </div>
@@ -260,17 +260,15 @@ export default function LoanPage() {
                     <div className="grid grid-2">
                         {/* Borrow Section */}
                         <div className="card">
-                            <h2 style={{ marginBottom: 24 }}>Borrow</h2>
+                            <h2 className="synapse-heading" style={{ marginBottom: 24 }}>Borrow</h2>
 
                             {hasActiveLoan ? (
-                                <div style={{ textAlign: 'center', padding: 20 }}>
-                                    <p style={{ color: 'var(--warning)' }}>
-                                        ⚠️ You have an active loan. Repay it before borrowing more.
-                                    </p>
+                                <div className="synapse-alert synapse-alert-warning" style={{ textAlign: 'center', padding: 20 }}>
+                                    ⚠️ You have an active loan. Repay it before borrowing more.
                                 </div>
                             ) : !storedOffer ? (
-                                <div style={{ textAlign: 'center', padding: 20 }}>
-                                    <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
+                                <div className="synapse-empty">
+                                    <p className="synapse-empty-text" style={{ marginBottom: 16 }}>
                                         You need a credit offer to borrow.
                                     </p>
                                     <Link href="/offer" className="btn btn-primary">
@@ -278,7 +276,7 @@ export default function LoanPage() {
                                     </Link>
                                 </div>
                             ) : offerExpired ? (
-                                <div style={{ textAlign: 'center', padding: 20 }}>
+                                <div className="synapse-empty">
                                     <p style={{ color: 'var(--error)', marginBottom: 16 }}>
                                         ⏱️ Your offer has expired.
                                     </p>
@@ -288,23 +286,17 @@ export default function LoanPage() {
                                 </div>
                             ) : (
                                 <>
-                                    <div style={{
-                                        background: 'var(--bg-tertiary)',
-                                        padding: 16,
-                                        borderRadius: 8,
-                                        marginBottom: 24,
-                                        fontSize: 14
-                                    }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>Credit Limit</span>
+                                    <div className="synapse-info-box">
+                                        <div className="synapse-info-row">
+                                            <span>Credit Limit</span>
                                             <span>${formatUSDC(BigInt(storedOffer.attestation.creditLimit))}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>APR</span>
+                                        <div className="synapse-info-row">
+                                            <span>APR</span>
                                             <span>{formatBps(storedOffer.attestation.aprBps)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>Max Tenure</span>
+                                        <div className="synapse-info-row">
+                                            <span>Max Tenure</span>
                                             <span>{storedOffer.attestation.tenureDays} days</span>
                                         </div>
                                     </div>
@@ -352,54 +344,45 @@ export default function LoanPage() {
 
                         {/* Repay Section */}
                         <div className="card">
-                            <h2 style={{ marginBottom: 24 }}>Active Loan</h2>
+                            <h2 className="synapse-heading" style={{ marginBottom: 24 }}>Active Loan</h2>
 
                             {loan ? (
                                 <>
-                                    <div style={{ marginBottom: 24 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>Principal</span>
+                                    <div className="synapse-info-box" style={{ marginBottom: 16 }}>
+                                        <div className="synapse-info-row">
+                                            <span>Principal</span>
                                             <span>${formatUSDC(loan.principal)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>Interest</span>
+                                        <div className="synapse-info-row">
+                                            <span>Interest</span>
                                             <span>${formatUSDC(loan.interestAmount)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>Total Due</span>
+                                        <div className="synapse-info-row">
+                                            <span>Total Due</span>
                                             <span style={{ color: 'var(--warning)', fontWeight: 600 }}>
                                                 ${formatUSDC(loan.totalDue)}
                                             </span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>Repaid</span>
-                                            <span style={{ color: 'var(--success)' }}>${formatUSDC(loan.amountRepaid)}</span>
+                                        <div className="synapse-info-row">
+                                            <span>Repaid</span>
+                                            <span style={{ color: 'var(--synapse-emerald)' }}>${formatUSDC(loan.amountRepaid)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>Remaining</span>
+                                        <div className="synapse-info-row">
+                                            <span>Remaining</span>
                                             <span style={{ fontWeight: 700 }}>${formatUSDC(remainingDue)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ color: 'var(--text-secondary)' }}>Due Date</span>
+                                        <div className="synapse-info-row">
+                                            <span>Due Date</span>
                                             <span>{formatDate(Number(loan.dueDate))}</span>
                                         </div>
                                     </div>
 
                                     {/* Progress bar */}
-                                    <div style={{
-                                        height: 8,
-                                        background: 'var(--bg-tertiary)',
-                                        borderRadius: 4,
-                                        marginBottom: 24,
-                                        overflow: 'hidden'
-                                    }}>
-                                        <div style={{
-                                            width: `${Number((loan.amountRepaid * 100n) / loan.totalDue)}%`,
-                                            height: '100%',
-                                            background: 'var(--success)',
-                                            borderRadius: 4,
-                                            transition: 'width 0.3s ease'
-                                        }} />
+                                    <div className="synapse-progress">
+                                        <div
+                                            className="synapse-progress-bar"
+                                            style={{ width: `${Number((loan.amountRepaid * 100n) / loan.totalDue)}%` }}
+                                        />
                                     </div>
 
                                     <div style={{ marginBottom: 16 }}>
@@ -407,13 +390,7 @@ export default function LoanPage() {
                                             <label className="label" style={{ margin: 0 }}>Repay Amount (USDC)</label>
                                             <button
                                                 onClick={handleRepayFull}
-                                                style={{
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    color: 'var(--accent-primary)',
-                                                    fontSize: 12,
-                                                    cursor: 'pointer'
-                                                }}
+                                                className="synapse-max-btn"
                                             >
                                                 Max: ${formatUSDC(remainingDue)}
                                             </button>
@@ -482,12 +459,10 @@ export default function LoanPage() {
                                     />
                                 </>
                             ) : (
-                                <div style={{ textAlign: 'center', padding: 40 }}>
-                                    <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-                                    <p style={{ color: 'var(--success)' }}>No active loan</p>
-                                    <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginTop: 8 }}>
-                                        You're all clear! Borrow when you need funds.
-                                    </p>
+                                <div className="synapse-success-state">
+                                    <div className="icon">✅</div>
+                                    <h2>No active loan</h2>
+                                    <p>You're all clear! Borrow when you need funds.</p>
                                 </div>
                             )}
                         </div>
@@ -495,10 +470,10 @@ export default function LoanPage() {
 
                     {/* Simulated Payout Notice */}
                     <div className="card" style={{ marginTop: 32 }}>
-                        <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <h3 className="synapse-heading" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                             📱 Payout Simulation (Demo)
                         </h3>
-                        <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                        <p className="synapse-body" style={{ lineHeight: 1.6 }}>
                             In the production version, successful loan approvals would trigger an instant UPI payout to your linked bank account.
                             For this hackathon demo, payouts are simulated and logged in the backend.
                             The event-driven architecture is fully implemented and ready for real payment integration.

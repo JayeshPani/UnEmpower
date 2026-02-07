@@ -170,13 +170,13 @@ export default function WorkProofsPage() {
     };
 
     return (
-        <div className="container">
+        <div className="container synapse-page">
             <Navigation />
 
             <NetworkGuard>
-                <main style={{ padding: '40px 0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-                        <h1 style={{ fontSize: 32 }}>Your Work Proofs</h1>
+                <main>
+                    <div className="synapse-page-header">
+                        <h1 className="synapse-page-title">Your Work Proofs</h1>
 
                         {IS_DEMO_ADMIN && (
                             <button
@@ -212,53 +212,55 @@ export default function WorkProofsPage() {
                         </div>
                         <div className="card">
                             <div className="stat">
-                                <div className="stat-value">${formatUSDC(stats.totalEarned)}</div>
+                                <div className="stat-value" style={{ color: 'var(--synapse-emerald)' }}>
+                                    ${formatUSDC(stats.totalEarned)}
+                                </div>
                                 <div className="stat-label">Total Earned</div>
                             </div>
                         </div>
                     </div>
 
                     <div className="card">
-                        <h2 style={{ marginBottom: 24 }}>Work History</h2>
+                        <h2 className="synapse-heading" style={{ marginBottom: 24 }}>Work History</h2>
 
                         {loading ? (
-                            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: 40 }}>
+                            <p className="synapse-body" style={{ textAlign: 'center', padding: 40 }}>
                                 Loading on-chain events...
                             </p>
                         ) : !CONTRACTS.WorkProof ? (
-                            <p style={{ color: 'var(--warning)', textAlign: 'center', padding: 40 }}>
+                            <p className="synapse-alert synapse-alert-warning" style={{ textAlign: 'center' }}>
                                 ⚠️ WorkProof contract not configured
                             </p>
                         ) : proofs.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: 40 }}>
-                                <p style={{ color: 'var(--text-secondary)' }}>No work proofs found on-chain.</p>
+                            <div className="synapse-empty">
+                                <p className="synapse-empty-text">No work proofs found on-chain.</p>
                                 {IS_DEMO_ADMIN && (
-                                    <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginTop: 8 }}>
+                                    <p className="synapse-empty-text" style={{ marginTop: 8 }}>
                                         Use the Admin button above to simulate a work proof.
                                     </p>
                                 )}
                             </div>
                         ) : (
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <table className="synapse-table">
                                 <thead>
-                                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                                        <th style={{ textAlign: 'left', padding: '12px 0', color: 'var(--text-secondary)', fontWeight: 500 }}>ID</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 0', color: 'var(--text-secondary)', fontWeight: 500 }}>Time</th>
-                                        <th style={{ textAlign: 'right', padding: '12px 0', color: 'var(--text-secondary)', fontWeight: 500 }}>Work Units</th>
-                                        <th style={{ textAlign: 'right', padding: '12px 0', color: 'var(--text-secondary)', fontWeight: 500 }}>Earned</th>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Time</th>
+                                        <th className="text-right">Work Units</th>
+                                        <th className="text-right">Earned</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {proofs.map((proof) => (
-                                        <tr key={proof.proofId.toString()} style={{ borderBottom: '1px solid var(--border)' }}>
-                                            <td style={{ padding: '16px 0' }}>#{proof.proofId.toString()}</td>
-                                            <td style={{ padding: '16px 0', color: 'var(--text-secondary)' }}>
+                                        <tr key={proof.proofId.toString()}>
+                                            <td>#{proof.proofId.toString()}</td>
+                                            <td style={{ color: 'rgba(163, 163, 163, 1)' }}>
                                                 {formatRelativeTime(Number(proof.timestamp))}
                                             </td>
-                                            <td style={{ padding: '16px 0', textAlign: 'right' }}>
+                                            <td className="text-right">
                                                 {proof.workUnits.toLocaleString()}
                                             </td>
-                                            <td style={{ padding: '16px 0', textAlign: 'right', color: 'var(--success)' }}>
+                                            <td className="text-right" style={{ color: 'var(--synapse-emerald)' }}>
                                                 ${formatUSDC(proof.earnedAmount)}
                                             </td>
                                         </tr>
