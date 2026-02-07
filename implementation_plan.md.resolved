@@ -1,0 +1,162 @@
+# UnEmpower MVP - Monorepo Scaffold Implementation Plan
+
+Build a hackathon-ready MVP for AI-first + Blockchain-enforced worker lending on Sepolia testnet.
+
+---
+
+## Proposed Changes
+
+### Root Configuration
+
+#### [NEW] [pnpm-workspace.yaml](file:///Users/jayeshpani/Desktop/UnEmpower/pnpm-workspace.yaml)
+Define pnpm workspace packages: `apps/*` and `packages/*`
+
+#### [NEW] [package.json](file:///Users/jayeshpani/Desktop/UnEmpower/package.json)
+Root package with workspace scripts for dev, build, deploy
+
+#### [NEW] [.env.example](file:///Users/jayeshpani/Desktop/UnEmpower/.env.example)
+Environment template with RPC URLs, private keys, contract addresses, Postgres URL
+
+#### [NEW] [.gitignore](file:///Users/jayeshpani/Desktop/UnEmpower/.gitignore)
+Ignore node_modules, .env, build artifacts, __pycache__, etc.
+
+---
+
+### Smart Contracts (packages/contracts)
+
+#### [NEW] [hardhat.config.ts](file:///Users/jayeshpani/Desktop/UnEmpower/packages/contracts/hardhat.config.ts)
+Hardhat configuration for local network and Sepolia deployment
+
+#### [NEW] [WorkerRegistry.sol](file:///Users/jayeshpani/Desktop/UnEmpower/packages/contracts/contracts/WorkerRegistry.sol)
+Registry for worker addresses with basic registration
+
+#### [NEW] [WorkProof.sol](file:///Users/jayeshpani/Desktop/UnEmpower/packages/contracts/contracts/WorkProof.sol)
+Submit work proofs, authorized verifier only, emits `WorkProofSubmitted` event
+
+#### [NEW] [CreditAttestationVerifier.sol](file:///Users/jayeshpani/Desktop/UnEmpower/packages/contracts/contracts/CreditAttestationVerifier.sol)
+EIP-712 signature verification with approved signers whitelist
+
+#### [NEW] [LoanVault.sol](file:///Users/jayeshpani/Desktop/UnEmpower/packages/contracts/contracts/LoanVault.sol)
+Borrow/repay logic requiring valid attestation + signature, emits `LoanApproved` and `Repaid` events
+
+#### [NEW] [MockUSDC.sol](file:///Users/jayeshpani/Desktop/UnEmpower/packages/contracts/contracts/MockUSDC.sol)
+ERC20 mock token with mint function for testing
+
+#### [NEW] [deploy scripts](file:///Users/jayeshpani/Desktop/UnEmpower/packages/contracts/scripts/)
+Deploy all contracts to local/Sepolia, output addresses
+
+---
+
+### Shared Package (packages/shared)
+
+#### [NEW] [types.ts](file:///Users/jayeshpani/Desktop/UnEmpower/packages/shared/src/types.ts)
+TypeScript types for attestation, loan, worker structs
+
+#### [NEW] [attestation.ts](file:///Users/jayeshpani/Desktop/UnEmpower/packages/shared/src/attestation.ts)
+EIP-712 typed data domain and types definition
+
+---
+
+### Backend API (apps/api)
+
+#### [NEW] [main.py](file:///Users/jayeshpani/Desktop/UnEmpower/apps/api/main.py)
+FastAPI app with CORS, placeholder routes
+
+#### [NEW] [routers/](file:///Users/jayeshpani/Desktop/UnEmpower/apps/api/routers/)
+- `workproof.py` - POST /workproof/simulate
+- `ai.py` - POST /ai/offer (scoring + signing)
+- `payout.py` - POST /payout/simulate
+
+#### [NEW] [services/](file:///Users/jayeshpani/Desktop/UnEmpower/apps/api/services/)
+- `signer.py` - EIP-712 signing with server private key
+- `scoring.py` - Simple AI/rules-based credit scoring
+
+#### [NEW] [models.py](file:///Users/jayeshpani/Desktop/UnEmpower/apps/api/models.py)
+SQLAlchemy models for workers, work_proofs, loans, events
+
+#### [NEW] [event_listener.py](file:///Users/jayeshpani/Desktop/UnEmpower/apps/api/event_listener.py)
+Watch chain for WorkProofSubmitted, LoanApproved, Repaid events
+
+#### [NEW] [requirements.txt](file:///Users/jayeshpani/Desktop/UnEmpower/apps/api/requirements.txt)
+FastAPI, uvicorn, web3, eth-account, SQLAlchemy, psycopg2, pydantic
+
+---
+
+### Frontend (apps/web)
+
+#### [NEW] Next.js App Router project
+Using `npx create-next-app@latest` with TypeScript, App Router
+
+#### [NEW] [wagmi.config.ts](file:///Users/jayeshpani/Desktop/UnEmpower/apps/web/wagmi.config.ts)
+Configure wagmi with Sepolia + local hardhat chains
+
+#### [NEW] [app/page.tsx](file:///Users/jayeshpani/Desktop/UnEmpower/apps/web/app/page.tsx)
+Landing page with wallet connect
+
+#### [NEW] [app/register/page.tsx](file:///Users/jayeshpani/Desktop/UnEmpower/apps/web/app/register/page.tsx)
+Worker registration form
+
+#### [NEW] [app/workproofs/page.tsx](file:///Users/jayeshpani/Desktop/UnEmpower/apps/web/app/workproofs/page.tsx)
+WorkProof feed display
+
+#### [NEW] [app/offer/page.tsx](file:///Users/jayeshpani/Desktop/UnEmpower/apps/web/app/offer/page.tsx)
+Generate offer screen with expiry countdown
+
+#### [NEW] [app/loan/page.tsx](file:///Users/jayeshpani/Desktop/UnEmpower/apps/web/app/loan/page.tsx)
+Borrow and repay interface
+
+---
+
+### Infrastructure (infra/)
+
+#### [NEW] [docker-compose.yml](file:///Users/jayeshpani/Desktop/UnEmpower/infra/docker-compose.yml)
+PostgreSQL service with persistent volume
+
+---
+
+### Documentation
+
+#### [NEW] [README.md](file:///Users/jayeshpani/Desktop/UnEmpower/README.md)
+Complete setup guide with all commands for local dev
+
+---
+
+## Verification Plan
+
+### Build Verification
+1. **pnpm install** - Run `pnpm install` at root, should complete without errors
+2. **Contracts compile** - Run `cd packages/contracts && npx hardhat compile`, should succeed
+3. **Next.js boots** - Run `cd apps/web && pnpm dev`, should start on port 3000
+4. **FastAPI boots** - Run `cd apps/api && uvicorn main:app --reload`, should start on port 8000
+
+### Manual Verification
+1. Open browser to http://localhost:3000 - should see landing page
+2. Connect wallet - should show connected address
+3. Call GET http://localhost:8000/health - should return `{"status": "ok"}`
+
+---
+
+## Commands Summary
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start PostgreSQL
+docker compose -f infra/docker-compose.yml up -d
+
+# Deploy contracts (local)
+cd packages/contracts
+npx hardhat node  # terminal 1
+npx hardhat run scripts/deploy.ts --network localhost  # terminal 2
+
+# Start API
+cd apps/api
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+
+# Start Web
+cd apps/web
+pnpm dev
+```

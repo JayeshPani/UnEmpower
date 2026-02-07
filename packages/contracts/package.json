@@ -1,0 +1,32 @@
+{
+    "name": "@unempower/contracts",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "compile": "hardhat compile",
+        "test": "hardhat test",
+        "node": "hardhat node",
+        "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
+        "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+        "clean": "hardhat clean",
+        "setup:local": "hardhat run scripts/setupRoles.ts --network localhost",
+        "setup:sepolia": "hardhat run scripts/setupRoles.ts --network sepolia",
+        "seed:local": "hardhat run scripts/seedLiquidity.ts --network localhost",
+        "seed:sepolia": "hardhat run scripts/seedLiquidity.ts --network sepolia"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+        "@nomicfoundation/hardhat-ethers": "^3.0.0",
+        "@typechain/ethers-v6": "^0.5.0",
+        "@typechain/hardhat": "^9.0.0",
+        "@types/node": "^20.0.0",
+        "dotenv": "^16.3.0",
+        "ethers": "^6.9.0",
+        "hardhat": "^2.19.0",
+        "typechain": "^8.3.0",
+        "typescript": "^5.3.0"
+    },
+    "dependencies": {
+        "@openzeppelin/contracts": "^5.0.0"
+    }
+}

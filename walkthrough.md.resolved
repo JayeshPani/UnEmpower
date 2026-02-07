@@ -1,0 +1,113 @@
+# UnEmpower MVP - Scaffold Walkthrough
+
+## Summary
+
+Created a complete hackathon-ready monorepo scaffold for **UnEmpower**, an AI-first blockchain-enforced worker lending platform.
+
+---
+
+## Files Created (42 files)
+
+### Root Configuration
+| File | Purpose |
+|------|---------|
+| [pnpm-workspace.yaml](file:///Users/jayeshpani/Desktop/UnEmpower/pnpm-workspace.yaml) | Monorepo workspace config |
+| [package.json](file:///Users/jayeshpani/Desktop/UnEmpower/package.json) | Root scripts and metadata |
+| [.env.example](file:///Users/jayeshpani/Desktop/UnEmpower/.env.example) | Environment template |
+| [.gitignore](file:///Users/jayeshpani/Desktop/UnEmpower/.gitignore) | Ignore patterns |
+
+### Smart Contracts (`packages/contracts/`)
+| File | Purpose |
+|------|---------|
+| `hardhat.config.ts` | Hardhat + Sepolia config |
+| `contracts/WorkerRegistry.sol` | Worker registration |
+| `contracts/WorkProof.sol` | On-chain work proofs |
+| `contracts/CreditAttestationVerifier.sol` | EIP-712 verification |
+| `contracts/LoanVault.sol` | Borrow/repay logic |
+| `contracts/MockUSDC.sol` | Test ERC20 token |
+| `scripts/deploy.ts` | Deployment script |
+
+### Shared Package (`packages/shared/`)
+| File | Purpose |
+|------|---------|
+| `src/types.ts` | TypeScript types |
+| `src/attestation.ts` | EIP-712 helpers |
+| `src/index.ts` | Barrel export |
+
+### Backend API (`apps/api/`)
+| File | Purpose |
+|------|---------|
+| `main.py` | FastAPI app |
+| `config.py` | Settings |
+| `database.py` | SQLAlchemy models |
+| `routers/workproof.py` | Work proof endpoints |
+| `routers/ai.py` | AI offer endpoint |
+| `routers/payout.py` | Payout simulation |
+| `services/scoring.py` | Credit scoring |
+| `services/signer.py` | EIP-712 signing |
+| `event_listener.py` | Blockchain indexer |
+
+### Frontend (`apps/web/`)
+| File | Purpose |
+|------|---------|
+| `app/page.tsx` | Landing page |
+| `app/register/page.tsx` | Worker registration |
+| `app/workproofs/page.tsx` | Work history |
+| `app/offer/page.tsx` | AI credit offer |
+| `app/loan/page.tsx` | Borrow/repay |
+| `config/wagmi.ts` | Chain config |
+
+### Infrastructure
+| File | Purpose |
+|------|---------|
+| `infra/docker-compose.yml` | PostgreSQL |
+| `README.md` | Documentation |
+
+---
+
+## Verification Results
+
+| Check | Status |
+|-------|--------|
+| `pnpm install` | ✅ 1062 packages installed |
+| Contracts compile | ✅ 28 Solidity files, 76 typings |
+| TypeScript types | ✅ Generated |
+| Project structure | ✅ Matches spec |
+
+---
+
+## Quick Start Commands
+
+```bash
+# 1. Install dependencies
+cd /Users/jayeshpani/Desktop/UnEmpower
+pnpm install
+
+# 2. Start PostgreSQL
+pnpm db:up
+
+# 3. Start Hardhat node (terminal 1)
+pnpm contracts:node
+
+# 4. Deploy contracts (terminal 2)
+pnpm contracts:deploy:local
+
+# 5. Start API (terminal 3)
+cd apps/api
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+
+# 6. Start frontend (terminal 4)
+pnpm web:dev
+```
+
+---
+
+## Next Steps (Prompt 2)
+
+1. Full wagmi contract integration in frontend
+2. Wire up real contract calls for register/borrow/repay
+3. Complete event listener background service
+4. Add ML model placeholder for credit scoring
+5. Test end-to-end flow on local network

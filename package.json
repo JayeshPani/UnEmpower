@@ -1,0 +1,54 @@
+{
+  "name": "unempower",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-first + Blockchain-enforced worker lending MVP",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "contracts:compile": "pnpm --filter @unempower/contracts compile",
+    "contracts:deploy:local": "pnpm --filter @unempower/contracts deploy:local",
+    "contracts:deploy:sepolia": "pnpm --filter @unempower/contracts deploy:sepolia",
+    "contracts:node": "pnpm --filter @unempower/contracts node",
+    "contracts:setup:local": "pnpm --filter @unempower/contracts setup:local",
+    "contracts:setup:sepolia": "pnpm --filter @unempower/contracts setup:sepolia",
+    "contracts:seed:local": "pnpm --filter @unempower/contracts seed:local",
+    "contracts:seed:sepolia": "pnpm --filter @unempower/contracts seed:sepolia",
+    "web:dev": "pnpm --filter @unempower/web dev",
+    "web:build": "pnpm --filter @unempower/web build",
+    "api:dev": "cd apps/api && uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "api:indexer": "cd apps/api && python3 event_listener.py",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:reset": "docker compose -f infra/docker-compose.yml down -v && docker compose -f infra/docker-compose.yml up -d",
+    "dev:all": "./scripts/start-local.sh",
+    "dev:all:clean": "./scripts/clean-local.sh --hard",
+    "dev:clean": "./scripts/clean-local.sh",
+    "dev:services": "npx concurrently -k \"pnpm contracts:node\" \"sleep 5 && pnpm contracts:deploy:local && pnpm contracts:setup:local && pnpm contracts:seed:local && echo '✅ Contracts Ready'\" \"sleep 10 && pnpm api:dev\" \"sleep 10 && pnpm api:indexer\" \"sleep 15 && pnpm web:dev\"",
+    "demo:bootstrap": "curl -X POST http://localhost:8000/demo/bootstrap",
+    "test:e2e": "cd apps/web-e2e && npx playwright test",
+    "sepolia:check": "python3 scripts/sepolia-check.py",
+    "sepolia:smoke": "python3 scripts/sepolia-smoke.py",
+    "backend:sepolia": "./scripts/backend-sepolia.sh"
+  },
+  "keywords": [
+    "blockchain",
+    "lending",
+    "ai",
+    "eip-712",
+    "ethereum"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
