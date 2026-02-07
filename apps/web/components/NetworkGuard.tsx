@@ -25,32 +25,6 @@ export function NetworkGuard({ children }: NetworkGuardProps) {
                 <div className="guard-icon">⏳</div>
                 <h3>Loading...</h3>
                 <p>Checking wallet connection...</p>
-
-                <style jsx>{`
-                    .network-guard {
-                        text-align: center;
-                        padding: 60px 20px;
-                        background: var(--bg-secondary);
-                        border: 1px solid var(--border);
-                        border-radius: 12px;
-                        max-width: 400px;
-                        margin: 40px auto;
-                    }
-
-                    .guard-icon {
-                        font-size: 48px;
-                        margin-bottom: 16px;
-                    }
-
-                    h3 {
-                        font-size: 20px;
-                        margin-bottom: 8px;
-                    }
-
-                    p {
-                        color: var(--text-secondary);
-                    }
-                `}</style>
             </div>
         );
     }
@@ -62,32 +36,6 @@ export function NetworkGuard({ children }: NetworkGuardProps) {
                 <div className="guard-icon">🔗</div>
                 <h3>Connect Wallet</h3>
                 <p>Please connect your wallet to continue.</p>
-
-                <style jsx>{`
-                    .network-guard {
-                        text-align: center;
-                        padding: 60px 20px;
-                        background: var(--bg-secondary);
-                        border: 1px solid var(--border);
-                        border-radius: 12px;
-                        max-width: 400px;
-                        margin: 40px auto;
-                    }
-
-                    .guard-icon {
-                        font-size: 48px;
-                        margin-bottom: 16px;
-                    }
-
-                    h3 {
-                        font-size: 20px;
-                        margin-bottom: 8px;
-                    }
-
-                    p {
-                        color: var(--text-secondary);
-                    }
-                `}</style>
             </div>
         );
     }
@@ -109,32 +57,6 @@ export function NetworkGuard({ children }: NetworkGuardProps) {
                 >
                     {isPending ? 'Switching...' : `Switch to ${getTargetChainName()}`}
                 </button>
-
-                <style jsx>{`
-                    .network-guard {
-                        text-align: center;
-                        padding: 60px 20px;
-                        background: var(--bg-secondary);
-                        border: 1px solid var(--border);
-                        border-radius: 12px;
-                        max-width: 400px;
-                        margin: 40px auto;
-                    }
-
-                    .guard-icon {
-                        font-size: 48px;
-                        margin-bottom: 16px;
-                    }
-
-                    h3 {
-                        font-size: 20px;
-                        margin-bottom: 8px;
-                    }
-
-                    p {
-                        color: var(--text-secondary);
-                    }
-                `}</style>
             </div>
         );
     }

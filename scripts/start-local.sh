@@ -16,8 +16,8 @@ echo -e "${BLUE}=${NC}\n"
 # 1. Start Database
 echo -e "${YELLOW}📦 [1/4] Ensuring Database is Up...${NC}"
 pnpm db:up
-echo "Waiting for PostgreSQL on port 5432..."
-if ! npx wait-on tcp:5432 --timeout 30000; then
+echo "Waiting for PostgreSQL on port 5433..."
+if ! npx wait-on tcp:5433 --timeout 30000; then
     echo -e "${RED}❌ Database failed to start${NC}"
     exit 1
 fi
@@ -44,6 +44,7 @@ echo '⛓️ Node detected, deploying contracts...' && \
 pnpm contracts:deploy:local && \
 pnpm contracts:setup:local && \
 pnpm contracts:seed:local && \
+./scripts/sync-local-env.sh && \
 echo '✅ Contracts Ready!'"
 
 # Define the command for "App Phase"
@@ -90,9 +91,9 @@ npx concurrently \
   --prefix-colors "blue,magenta,cyan,green,yellow" \
   "pnpm contracts:node" \
   "$SETUP_CMD" \
-  "npx wait-on tcp:8545 --interval 1000 --timeout 60000 && sleep 15 && pnpm api:dev" \
-  "npx wait-on tcp:8545 --interval 1000 --timeout 60000 && sleep 20 && pnpm api:indexer" \
-  "npx wait-on tcp:8000 --interval 1000 --timeout 60000 && sleep 5 && pnpm web:dev"
+  "npx wait-on tcp:8545 --interval 1000 --timeout 60000 && sleep 45 && pnpm api:dev" \
+  "npx wait-on tcp:8545 --interval 1000 --timeout 60000 && sleep 50 && pnpm api:indexer" \
+  "npx wait-on tcp:8000 --interval 1000 --timeout 60000 && sleep 5 && (rm -rf apps/web/.next 2>/dev/null; true) && pnpm web:dev"
 
 # Note: The 'sleep 15' in API startup gives time for 'SETUP_CMD' to run deploy/seed.
 # In a true production CI we'd use a ready-file, but this is fine for dev:all.

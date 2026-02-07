@@ -2,10 +2,10 @@
 
 import { http, createConfig } from 'wagmi';
 import { hardhat, sepolia } from 'wagmi/chains';
-import { injected, metaMask } from 'wagmi/connectors';
+import { injected } from 'wagmi/connectors';
 
 // Get chain ID from env
-const targetChainId = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '31337');
+const targetChainId = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '11155111');
 
 // Configure chains
 export const chains = [hardhat, sepolia] as const;
@@ -13,12 +13,11 @@ export const chains = [hardhat, sepolia] as const;
 // Get the target chain object
 export const targetChain = chains.find(c => c.id === targetChainId) || hardhat;
 
-// Create wagmi config
+// Create wagmi config (injected works with MetaMask, WalletConnect, etc. as browser extension)
 export const config = createConfig({
     chains,
     connectors: [
         injected(),
-        metaMask(),
     ],
     transports: {
         [hardhat.id]: http('http://127.0.0.1:8545'),
