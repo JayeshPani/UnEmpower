@@ -6,12 +6,18 @@ Tables:
 - loan_events: Indexed LoanApproved events
 - repay_events: Indexed Repaid events
 - indexer_state: Block tracking for indexer
+- work_types: Work type definitions (HOURS, SHIFTS, TASKS, SQFT, KM)
+- projects: Projects with work type support
+- workers: Workers managed off-chain
+- shift_logs: Work logs with rich unit/rate/earned tracking
+- performance_reviews: Reviews with tags and source
 """
 
-from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Boolean, DateTime, Text, Index, Float, JSON, Date, ForeignKey
+from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Boolean, DateTime, Text, Index, Float, JSON, Date, ForeignKey, Enum as SAEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
+import enum
 import uuid as uuid_pkg
 
 from settings import get_settings
@@ -19,26 +25,32 @@ from settings import get_settings
 Base = declarative_base()
 
 
+# ── Unit type enum ──────────────────────────────────────────────────
+
+class UnitType(str, enum.Enum):
+    HOURS = "HOURS"
+    SHIFTS = "SHIFTS"
+    TASKS = "TASKS"
+    SQFT = "SQFT"
+    KM = "KM"
+
+
+# ── Existing chain event tables (unchanged) ─────────────────────────
+
 class WorkProofEvent(Base):
     """Indexed WorkProofSubmitted events."""
     __tablename__ = "workproof_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    # Event data
     proof_id = Column(BigInteger, nullable=False, index=True)
     worker = Column(String(42), nullable=False, index=True)
     proof_hash = Column(String(66), nullable=False)
     work_units = Column(BigInteger, nullable=False)
-    earned_amount = Column(String(78), nullable=False)  # Store as string for large numbers
+    earned_amount = Column(String(78), nullable=False)
     event_timestamp = Column(BigInteger, nullable=False)
-    
-    # Block data
     block_number = Column(BigInteger, nullable=False, index=True)
     tx_hash = Column(String(66), nullable=False, unique=True)
     log_index = Column(Integer, nullable=False)
-    
-    # Indexer metadata
     indexed_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
@@ -51,20 +63,14 @@ class LoanEvent(Base):
     __tablename__ = "loan_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    # Event data
     borrower = Column(String(42), nullable=False, index=True)
     principal = Column(String(78), nullable=False)
     interest_amount = Column(String(78), nullable=False)
     due_date = Column(BigInteger, nullable=False)
     nonce = Column(BigInteger, nullable=False)
-    
-    # Block data
     block_number = Column(BigInteger, nullable=False, index=True)
     tx_hash = Column(String(66), nullable=False, unique=True)
     log_index = Column(Integer, nullable=False)
-    
-    # Indexer metadata
     indexed_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -73,18 +79,12 @@ class RepayEvent(Base):
     __tablename__ = "repay_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    # Event data
     borrower = Column(String(42), nullable=False, index=True)
     amount = Column(String(78), nullable=False)
     remaining = Column(String(78), nullable=False)
-    
-    # Block data
     block_number = Column(BigInteger, nullable=False, index=True)
     tx_hash = Column(String(66), nullable=False, unique=True)
     log_index = Column(Integer, nullable=False)
-    
-    # Indexer metadata
     indexed_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -101,9 +101,7 @@ class IndexerState(Base):
 # === AI Feature Tables ===
 
 class FraudSignal(Base):
-    """Fraud anomaly detection results."""
     __tablename__ = "fraud_signals"
-
     id = Column(Integer, primary_key=True, autoincrement=True)
     worker = Column(String(42), nullable=False, index=True)
     anomaly_score = Column(Integer, nullable=False)
@@ -114,9 +112,7 @@ class FraudSignal(Base):
 
 
 class WorkProofFlag(Base):
-    """WorkProof integrity flags."""
     __tablename__ = "workproof_flags"
-
     id = Column(Integer, primary_key=True, autoincrement=True)
     worker = Column(String(42), nullable=False, index=True)
     flag_score = Column(Integer, nullable=False)
@@ -127,9 +123,7 @@ class WorkProofFlag(Base):
 
 
 class RiskAlert(Base):
-    """Default early warning alerts."""
     __tablename__ = "risk_alerts"
-
     id = Column(Integer, primary_key=True, autoincrement=True)
     worker = Column(String(42), nullable=False, index=True)
     risk_score = Column(Integer, nullable=False)
@@ -141,27 +135,19 @@ class RiskAlert(Base):
 
 
 class OfferHistory(Base):
-    """Credit offer history for fairness auditing."""
     __tablename__ = "offer_history"
-
     id = Column(Integer, primary_key=True, autoincrement=True)
     worker = Column(String(42), nullable=False, index=True)
-    
-    # Attestation fields
     credit_limit = Column(String(78), nullable=False)
     apr_bps = Column(Integer, nullable=False)
     tenure_days = Column(Integer, nullable=False)
     pd = Column(Integer, nullable=False)
     trust_score = Column(Integer, nullable=False)
     fraud_flags = Column(Integer, nullable=False, default=0)
-    
-    # AI signal summaries
     risk_score = Column(Integer, nullable=True)
     forecast_14d = Column(Float, nullable=True)
     anomaly_score = Column(Integer, nullable=True)
     integrity_score = Column(Integer, nullable=True)
-    
-    # Metadata
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     __table_args__ = (
@@ -169,7 +155,23 @@ class OfferHistory(Base):
     )
 
 
-# === Manager Module Tables ===
+# ══════════════════════════════════════════════════════════════════════
+# Manager Module Tables (P3-1 — enhanced)
+# ══════════════════════════════════════════════════════════════════════
+
+class WorkTypeModel(Base):
+    """Work type definitions (Delivery, Construction, Security, etc.)."""
+    __tablename__ = "work_types"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False, unique=True)
+    unit_type = Column(String(10), nullable=False, default="HOURS")   # HOURS/SHIFTS/TASKS/SQFT/KM
+    default_unit_rate = Column(Integer, nullable=False, default=0)    # ₹ per unit
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    projects = relationship("Project", back_populates="work_type")
+
 
 class Project(Base):
     """Projects that workers are assigned to."""
@@ -178,10 +180,15 @@ class Project(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     location = Column(String(255), nullable=True)
-    default_rate_per_hour = Column(Integer, nullable=False, default=0)  # in ₹
+    default_rate_per_hour = Column(Integer, nullable=False, default=0)        # legacy ₹/hr
+    work_type_id = Column(Integer, ForeignKey("work_types.id"), nullable=True)
+    unit_type = Column(String(10), nullable=True)                             # override project unit_type
+    default_unit_rate = Column(Integer, nullable=True)                        # ₹ per unit (overrides work_type)
+    default_daily_target_units = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
+    work_type = relationship("WorkTypeModel", back_populates="projects")
     workers = relationship("Worker", back_populates="project")
     shift_logs = relationship("ShiftLog", back_populates="project")
 
@@ -195,8 +202,9 @@ class Worker(Base):
     phone = Column(String(20), nullable=True)
     wallet_address = Column(String(42), nullable=True, unique=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
-    rate_per_hour = Column(Integer, nullable=True)  # Override for this worker, in ₹
-    status = Column(String(20), nullable=False, default="active")  # active/inactive
+    rate_per_hour = Column(Integer, nullable=True)    # legacy ₹/hr override
+    rate_per_unit = Column(Integer, nullable=True)    # ₹ per unit override
+    status = Column(String(20), nullable=False, default="active")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -206,15 +214,23 @@ class Worker(Base):
 
 
 class ShiftLog(Base):
-    """Daily shift logs for workers."""
+    """Work logs for workers (enhanced from shift_logs)."""
     __tablename__ = "shift_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     worker_id = Column(Integer, ForeignKey("workers.id"), nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     date = Column(Date, nullable=False)
-    hours_worked = Column(Float, nullable=False)
-    work_units = Column(Float, nullable=True)  # defaults to hours_worked if not set
+    hours_worked = Column(Float, nullable=False, default=0)
+    work_units = Column(Float, nullable=True)
+    # ── New P3-1 fields ──
+    unit_type = Column(String(10), nullable=True, default="HOURS")    # HOURS/SHIFTS/TASKS/SQFT/KM
+    units_done = Column(Float, nullable=True)                         # computed or provided
+    rate_per_unit = Column(Integer, nullable=True)                    # ₹ per unit used
+    earned = Column(Integer, nullable=True, default=0)                # ₹ earned (computed, stored)
+    duration_minutes = Column(Integer, nullable=True)
+    proof_media_url = Column(String(500), nullable=True)
+    quality_score = Column(Integer, nullable=True)                    # 0–100
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -228,15 +244,18 @@ class ShiftLog(Base):
 
 
 class PerformanceReview(Base):
-    """Performance reviews for workers."""
+    """Performance reviews for workers (enhanced with tags + source)."""
     __tablename__ = "performance_reviews"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     worker_id = Column(Integer, ForeignKey("workers.id"), nullable=False)
     review_date = Column(Date, nullable=False)
-    rating = Column(Integer, nullable=False)  # 1-5
+    rating = Column(Integer, nullable=False)          # 1-5
     comment = Column(Text, nullable=True)
     reviewer_name = Column(String(255), nullable=True)
+    # ── New P3-1 fields ──
+    tags = Column(JSON, nullable=True)                # e.g. ["late", "excellent", "safe"]
+    review_source = Column(String(20), nullable=True, default="manager")  # manager/system
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -247,13 +266,15 @@ class PerformanceReview(Base):
     )
 
 
-# Engine and session factory (lazy init)
+# ══════════════════════════════════════════════════════════════════════
+# Engine and session factory
+# ══════════════════════════════════════════════════════════════════════
+
 _engine = None
 _SessionLocal = None
 
 
 def get_engine():
-    """Get or create database engine."""
     global _engine
     if _engine is None:
         settings = get_settings()
@@ -267,7 +288,6 @@ def get_engine():
 
 
 def get_session_local():
-    """Get session factory."""
     global _SessionLocal
     if _SessionLocal is None:
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
@@ -275,7 +295,6 @@ def get_session_local():
 
 
 def get_db():
-    """Dependency for FastAPI to get DB session."""
     SessionLocal = get_session_local()
     db = SessionLocal()
     try:
@@ -285,14 +304,12 @@ def get_db():
 
 
 def init_db():
-    """Initialize database tables."""
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
-    print("✅ Database tables initialized")
+    print("✅ Database tables initialized (P3-1 enhanced schema)")
 
 
 def check_db_connection() -> bool:
-    """Check if database is accessible."""
     try:
         from sqlalchemy import text
         engine = get_engine()

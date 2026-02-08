@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Navigation } from '@/components/Navigation';
+import { PriorityChecklist } from '@/components/PriorityChecklist';
 import { API_URL } from '@/config/contracts';
 
 /* ------------------------------------------------------------------ */
@@ -50,7 +51,20 @@ interface ReviewResponse {
     reviewer_name: string | null;
 }
 
-type Tab = 'projects' | 'workers';
+interface InsightWorker {
+    worker_id: number;
+    worker_name: string;
+    project_name: string | null;
+    wallet_linked: boolean;
+    status: string;
+    total_shifts: number;
+    total_earned: number;
+    avg_rating: number | null;
+    reasons: { code: string; label: string; detail: string }[];
+    severity_score: number;
+}
+
+type Tab = 'projects' | 'workers' | 'insights';
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -75,6 +89,10 @@ export default function ManagerPage() {
     const [workerShifts, setWorkerShifts] = useState<ShiftResponse[]>([]);
     const [workerReviews, setWorkerReviews] = useState<ReviewResponse[]>([]);
     const [detailLoading, setDetailLoading] = useState(false);
+
+    // ── Insights ──
+    const [insights, setInsights] = useState<InsightWorker[]>([]);
+    const [insightsLoading, setInsightsLoading] = useState(false);
 
     // ── UI ──
     const [activeTab, setActiveTab] = useState<Tab>('projects');
@@ -228,11 +246,21 @@ export default function ManagerPage() {
         }
     }, [savedToken, authVerified, api, flash]);
 
+    const fetchInsights = useCallback(async () => {
+        if (!savedToken || !authVerified) return;
+        try {
+            setInsightsLoading(true);
+            const data = await api('/suggestions/manager');
+            setInsights(data.insights || []);
+        } catch { /* silent */ }
+        finally { setInsightsLoading(false); }
+    }, [savedToken, authVerified, api]);
+
     const fetchAll = useCallback(async () => {
         setLoading(true);
-        await Promise.all([fetchProjects(), fetchWorkers()]);
+        await Promise.all([fetchProjects(), fetchWorkers(), fetchInsights()]);
         setLoading(false);
-    }, [fetchProjects, fetchWorkers]);
+    }, [fetchProjects, fetchWorkers, fetchInsights]);
 
     useEffect(() => { if (savedToken && authVerified) fetchAll(); }, [savedToken, authVerified, fetchAll]);
 
@@ -593,7 +621,7 @@ export default function ManagerPage() {
                             display: 'flex', gap: 0, marginBottom: 32,
                             borderBottom: '1px solid rgba(255,255,255,.08)',
                         }}>
-                            {(['projects', 'workers'] as Tab[]).map(tab => (
+                            {(['projects', 'workers', 'insights'] as Tab[]).map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
@@ -606,9 +634,17 @@ export default function ManagerPage() {
                                         fontSize: 15, fontWeight: 500,
                                         cursor: 'pointer',
                                         transition: 'all .2s',
+                                        position: 'relative',
                                     }}
                                 >
-                                    {tab === 'projects' ? 'Projects' : 'Workers'}
+                                    {tab === 'projects' ? 'Projects' : tab === 'workers' ? 'Workers' : 'Insights'}
+                                    {tab === 'insights' && insights.length > 0 && (
+                                        <span style={{
+                                            position: 'absolute', top: 6, right: 6,
+                                            width: 8, height: 8, borderRadius: '50%',
+                                            background: '#ef4444',
+                                        }} />
+                                    )}
                                 </button>
                             ))}
                             {loading && (
@@ -1048,6 +1084,139 @@ export default function ManagerPage() {
                                                             )}
                                                         </div>
                                                     )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* ============================================ */}
+                        {/*  INSIGHTS TAB                                */}
+                        {/* ============================================ */}
+                        {activeTab === 'insights' && (
+                            <>
+                                {/* Manager Checklist */}
+                                <PriorityChecklist type="manager" managerToken={savedToken} />
+
+                                {/* Insights Header */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                    <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Workers Needing Attention</h2>
+                                    <span style={{ fontSize: 13, color: 'rgba(163,163,163,.6)' }}>
+                                        {insights.length} worker{insights.length !== 1 ? 's' : ''} flagged
+                                    </span>
+                                </div>
+
+                                {insightsLoading ? (
+                                    <div className="card" style={{ textAlign: 'center', padding: 40, color: 'rgba(163,163,163,.6)' }}>
+                                        Loading insights...
+                                    </div>
+                                ) : insights.length === 0 ? (
+                                    <div className="card" style={{ textAlign: 'center', padding: 48 }}>
+                                        <span style={{ fontSize: 32, display: 'block', marginBottom: 12 }}>&#x2705;</span>
+                                        <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>All clear!</h3>
+                                        <p style={{ margin: 0, fontSize: 14, color: 'rgba(163,163,163,.6)' }}>
+                                            No workers currently need attention.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        {insights.map(ins => {
+                                            const severityColor = ins.severity_score >= 7 ? '#ef4444' : ins.severity_score >= 4 ? '#f59e0b' : '#818cf8';
+                                            return (
+                                                <div key={ins.worker_id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                                                    <div style={{ padding: '16px 20px' }}>
+                                                        {/* Worker info row */}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                                                            <div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                    <span style={{
+                                                                        width: 8, height: 8, borderRadius: '50%',
+                                                                        background: ins.status === 'active' ? '#10b981' : '#6b7280',
+                                                                    }} />
+                                                                    <strong style={{ fontSize: 15 }}>{ins.worker_name}</strong>
+                                                                    <span style={{ fontSize: 11, color: 'rgba(163,163,163,.5)' }}>#{ins.worker_id}</span>
+                                                                </div>
+                                                                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(163,163,163,.7)' }}>
+                                                                    {ins.project_name || 'No project'}
+                                                                    {ins.total_shifts > 0 && <span> &middot; {ins.total_shifts} shifts</span>}
+                                                                    {ins.total_earned > 0 && <span> &middot; &#8377;{ins.total_earned.toLocaleString()}</span>}
+                                                                    {ins.avg_rating && <span> &middot; {ins.avg_rating}/5</span>}
+                                                                </p>
+                                                            </div>
+                                                            <div style={{
+                                                                display: 'flex', alignItems: 'center', gap: 6,
+                                                                fontSize: 12, color: severityColor, fontWeight: 600,
+                                                            }}>
+                                                                <span style={{
+                                                                    width: 6, height: 6, borderRadius: '50%',
+                                                                    background: severityColor,
+                                                                }} />
+                                                                Severity: {ins.severity_score}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Reason tags */}
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                                                            {ins.reasons.map((r, i) => {
+                                                                const codeColors: Record<string, string> = {
+                                                                    NO_WALLET: '#a78bfa', INACTIVE: '#ef4444', NO_LOGS: '#ef4444',
+                                                                    LOW_UNITS: '#f59e0b', POOR_REVIEWS: '#ef4444', NO_REVIEWS: '#f59e0b',
+                                                                    UNASSIGNED: '#818cf8',
+                                                                };
+                                                                const c = codeColors[r.code] || '#818cf8';
+                                                                return (
+                                                                    <div key={i} style={{
+                                                                        padding: '6px 12px', borderRadius: 8,
+                                                                        background: `${c}11`, border: `1px solid ${c}33`,
+                                                                        fontSize: 12,
+                                                                    }}>
+                                                                        <span style={{ fontWeight: 600, color: c }}>{r.label}</span>
+                                                                        <span style={{ color: 'rgba(163,163,163,.6)', marginLeft: 6 }}>{r.detail}</span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        {/* Quick Actions */}
+                                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                            <button
+                                                                className="btn btn-secondary"
+                                                                style={{ fontSize: 12, padding: '6px 14px' }}
+                                                                onClick={() => { setActiveTab('workers'); setTimeout(() => toggleWorkerExpand(ins.worker_id), 100); }}
+                                                            >
+                                                                View Details
+                                                            </button>
+                                                            {ins.reasons.some(r => r.code === 'NO_LOGS' || r.code === 'INACTIVE' || r.code === 'LOW_UNITS') && (
+                                                                <button
+                                                                    className="btn btn-secondary"
+                                                                    style={{ fontSize: 12, padding: '6px 14px', color: '#10b981', borderColor: 'rgba(16,185,129,.25)' }}
+                                                                    onClick={() => { setActiveTab('workers'); setTimeout(() => toggleWorkerExpand(ins.worker_id), 100); }}
+                                                                >
+                                                                    Add Shift
+                                                                </button>
+                                                            )}
+                                                            {ins.reasons.some(r => r.code === 'NO_REVIEWS' || r.code === 'POOR_REVIEWS') && (
+                                                                <button
+                                                                    className="btn btn-secondary"
+                                                                    style={{ fontSize: 12, padding: '6px 14px', color: '#f59e0b', borderColor: 'rgba(245,158,11,.25)' }}
+                                                                    onClick={() => { setActiveTab('workers'); setTimeout(() => toggleWorkerExpand(ins.worker_id), 100); }}
+                                                                >
+                                                                    Add Review
+                                                                </button>
+                                                            )}
+                                                            {ins.reasons.some(r => r.code === 'NO_WALLET') && (
+                                                                <button
+                                                                    className="btn btn-secondary"
+                                                                    style={{ fontSize: 12, padding: '6px 14px', color: '#a78bfa', borderColor: 'rgba(167,139,250,.25)' }}
+                                                                    onClick={() => { setActiveTab('workers'); setTimeout(() => toggleWorkerExpand(ins.worker_id), 100); }}
+                                                                >
+                                                                    Link Wallet
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             );
                                         })}

@@ -9,6 +9,8 @@ import { MetricsTicker } from '@/components/MetricsTicker';
 import { FeatureCard } from '@/components/FeatureCard';
 import { CodeBlock } from '@/components/CodeBlock';
 import { Footer } from '@/components/Footer';
+import { SuggestionsPanel } from '@/components/SuggestionsPanel';
+import { PriorityChecklist } from '@/components/PriorityChecklist';
 import { CONTRACTS } from '@/config/contracts';
 import { MockUSDCABI } from '@/config/abis';
 import { formatUSDC } from '@/lib/format';
@@ -126,6 +128,14 @@ export default function Home() {
       </section>
 
       <MetricsTicker />
+
+      {/* Suggestions + Checklist for connected users */}
+      {mounted && isConnected && address && (
+        <section style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px' }}>
+          <SuggestionsPanel wallet={address} />
+          <PriorityChecklist type="worker" wallet={address} />
+        </section>
+      )}
 
       {/* Feature Grid */}
       <section className="synapse-features">
