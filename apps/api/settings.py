@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     # === Demo ===
     DEMO_MODE: bool = Field(default=False, description="Enable demo endpoints")
 
+    # === Manager Module ===
+    MANAGER_ADMIN_TOKEN: str = Field(
+        default="manager-secret-token",
+        description="Bearer token for manager API authentication"
+    )
+
     @field_validator("CHAIN_ID", mode="before")
     @classmethod
     def parse_chain_id(cls, v):

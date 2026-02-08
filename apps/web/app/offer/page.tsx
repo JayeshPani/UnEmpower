@@ -133,7 +133,7 @@ export default function OfferPage() {
                     {!offer ? (
                         <div className="card synapse-ai-card" style={{ maxWidth: 600, margin: '0 auto' }}>
                             <div className="synapse-ai-card-icon">🤖</div>
-                            <h2 className="synapse-ai-card-title">AI-Powered Credit Analysis</h2>
+                            <h2 className="synapse-ai-card-title">Credit Analysis</h2>
                             <p className="synapse-ai-card-text">
                                 Our AI will analyze your on-chain work history and generate a personalized credit offer.
                             </p>

@@ -1019,7 +1019,11 @@ body {
 
 .synapse-page {
   min-height: 100vh;
-  padding-top: 120px;
+  padding-top: 100px;
+}
+
+.synapse-page>main {
+  padding-top: var(--space-8);
 }
 
 .synapse-page-inner {
@@ -1034,7 +1038,8 @@ body {
 }
 
 .synapse-page-title {
-  margin-bottom: var(--space-3);
+  margin-top: var(--space-12);
+  margin-bottom: var(--space-4);
 }
 
 .synapse-page-desc {
@@ -1691,4 +1696,234 @@ body {
 
 .data-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* ============================================================
+   MODULE 13: Form Elements (Vantablack Styled)
+   ============================================================ */
+
+/* Base Input Styles */
+input,
+select,
+textarea {
+  width: 100%;
+  padding: var(--space-4);
+  background: rgba(10, 10, 10, 0.8);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* Focus States */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px var(--violet-muted),
+    0 0 20px -5px var(--violet-glow);
+  background: rgba(15, 15, 15, 0.9);
+}
+
+/* Hover States */
+input:hover:not(:focus),
+select:hover:not(:focus),
+textarea:hover:not(:focus) {
+  border-color: var(--border-strong);
+  background: rgba(15, 15, 15, 0.7);
+}
+
+/* Select Specific Styling */
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23737373' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  padding-right: var(--space-10);
+}
+
+select option {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  padding: var(--space-3);
+}
+
+/* Textarea Specific */
+textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Number Input - Hide Spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Date Input Styling */
+input[type="date"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+  cursor: pointer;
+  transition: filter var(--transition-fast);
+}
+
+input[type="date"]:hover::-webkit-calendar-picker-indicator,
+input[type="date"]:focus::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
+/* Range Input Styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  padding: 0;
+  background: var(--border-default);
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--violet);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 15px var(--violet-glow);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--violet);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="range"]:focus {
+  box-shadow: none;
+}
+
+/* Password Input */
+input[type="password"] {
+  letter-spacing: 0.15em;
+}
+
+/* Disabled State */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(10, 10, 10, 0.4);
+}
+
+/* Read-only State */
+input:read-only,
+textarea:read-only {
+  border-style: dashed;
+  cursor: default;
+}
+
+/* Form Container Improvements */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Label Styling */
+label {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+/* Input Groups */
+.input-group {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.input-group input,
+.input-group select {
+  flex: 1;
+}
+
+/* Form Field with Icon */
+.input-with-icon {
+  position: relative;
+}
+
+.input-with-icon input {
+  padding-left: var(--space-10);
+}
+
+.input-with-icon .icon {
+  position: absolute;
+  left: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Validation States */
+input.error,
+select.error,
+textarea.error {
+  border-color: #ef4444;
+}
+
+input.error:focus,
+select.error:focus,
+textarea.error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15),
+    0 0 20px -5px rgba(239, 68, 68, 0.4);
+}
+
+input.success,
+select.success,
+textarea.success {
+  border-color: var(--emerald);
+}
+
+input.success:focus,
+select.success:focus,
+textarea.success:focus {
+  box-shadow: 0 0 0 3px var(--emerald-muted),
+    0 0 20px -5px var(--emerald-glow);
 }

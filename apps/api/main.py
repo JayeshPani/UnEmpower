@@ -16,6 +16,7 @@ from settings import validate_settings_on_startup, get_settings
 from database import init_db, check_db_connection
 from routers import ai, workproof, payout, events
 from routers import stats, forecast, fraud_router, integrity, alerts, coach_router, audit
+from routers import manager, worker
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -122,6 +123,10 @@ app.include_router(integrity.router)
 app.include_router(alerts.router)
 app.include_router(coach_router.router)
 app.include_router(audit.router)
+
+# Manager Module routers
+app.include_router(manager.router)
+app.include_router(worker.router)
 
 if settings.DEMO_MODE:
     from routers import demo

@@ -79,7 +79,7 @@ export default function Home() {
           </h1>
           <p className="synapse-hero-sub synapse-body synapse-stagger-2">
             AI-first, blockchain-enforced worker lending. Build your on-chain work
-            history, get AI-powered credit scoring, and access instant loans with
+            history, get credit scoring, and access instant loans with
             transparent, verifiable terms.
           </p>
 

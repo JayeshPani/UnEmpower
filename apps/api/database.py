@@ -8,10 +8,11 @@ Tables:
 - indexer_state: Block tracking for indexer
 """
 
-from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Boolean, DateTime, Text, Index, Float, JSON
+from sqlalchemy import create_engine, Column, String, Integer, BigInteger, Boolean, DateTime, Text, Index, Float, JSON, Date, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
+import uuid as uuid_pkg
 
 from settings import get_settings
 
@@ -165,6 +166,84 @@ class OfferHistory(Base):
 
     __table_args__ = (
         Index('ix_offer_history_worker_date', 'worker', 'created_at'),
+    )
+
+
+# === Manager Module Tables ===
+
+class Project(Base):
+    """Projects that workers are assigned to."""
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    location = Column(String(255), nullable=True)
+    default_rate_per_hour = Column(Integer, nullable=False, default=0)  # in ₹
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    workers = relationship("Worker", back_populates="project")
+    shift_logs = relationship("ShiftLog", back_populates="project")
+
+
+class Worker(Base):
+    """Workers managed off-chain (may or may not have wallets)."""
+    __tablename__ = "workers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    full_name = Column(String(255), nullable=False)
+    phone = Column(String(20), nullable=True)
+    wallet_address = Column(String(42), nullable=True, unique=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+    rate_per_hour = Column(Integer, nullable=True)  # Override for this worker, in ₹
+    status = Column(String(20), nullable=False, default="active")  # active/inactive
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    project = relationship("Project", back_populates="workers")
+    shift_logs = relationship("ShiftLog", back_populates="worker", cascade="all, delete-orphan")
+    reviews = relationship("PerformanceReview", back_populates="worker", cascade="all, delete-orphan")
+
+
+class ShiftLog(Base):
+    """Daily shift logs for workers."""
+    __tablename__ = "shift_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    worker_id = Column(Integer, ForeignKey("workers.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    date = Column(Date, nullable=False)
+    hours_worked = Column(Float, nullable=False)
+    work_units = Column(Float, nullable=True)  # defaults to hours_worked if not set
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    worker = relationship("Worker", back_populates="shift_logs")
+    project = relationship("Project", back_populates="shift_logs")
+
+    __table_args__ = (
+        Index('ix_shift_logs_worker_date', 'worker_id', 'date'),
+    )
+
+
+class PerformanceReview(Base):
+    """Performance reviews for workers."""
+    __tablename__ = "performance_reviews"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    worker_id = Column(Integer, ForeignKey("workers.id"), nullable=False)
+    review_date = Column(Date, nullable=False)
+    rating = Column(Integer, nullable=False)  # 1-5
+    comment = Column(Text, nullable=True)
+    reviewer_name = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    worker = relationship("Worker", back_populates="reviews")
+
+    __table_args__ = (
+        Index('ix_reviews_worker_date', 'worker_id', 'review_date'),
     )
 
 
