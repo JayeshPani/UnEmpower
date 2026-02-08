@@ -11,7 +11,7 @@ import { formatRelativeTime } from '@/lib/format';
 
 // Types for worker summary API response
 interface WorkerInfo {
-    id: string;
+    id: number;
     full_name: string;
     project: string | null;
     rate_per_hour: number;
@@ -211,6 +211,7 @@ export default function WorkProofsPage() {
 
                         {IS_DEMO_ADMIN && (
                             <button
+                                id="simulate-workproof-btn"
                                 className="btn btn-secondary"
                                 onClick={handleSimulate}
                                 disabled={simulating}

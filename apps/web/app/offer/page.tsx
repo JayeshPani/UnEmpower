@@ -145,6 +145,7 @@ export default function OfferPage() {
                             )}
 
                             <button
+                                id="generate-offer-btn"
                                 className="btn btn-primary"
                                 onClick={generateOffer}
                                 disabled={loading}

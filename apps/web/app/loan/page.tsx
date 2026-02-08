@@ -316,6 +316,7 @@ export default function LoanPage() {
                                     </div>
 
                                     <button
+                                        id="borrow-btn"
                                         className="btn btn-primary"
                                         style={{ width: '100%' }}
                                         onClick={handleBorrow}
@@ -428,6 +429,7 @@ export default function LoanPage() {
                                         </button>
                                     ) : (
                                         <button
+                                            id="repay-btn"
                                             className="btn btn-primary"
                                             style={{ width: '100%' }}
                                             onClick={handleRepay}

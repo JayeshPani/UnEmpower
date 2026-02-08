@@ -1,20 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { API_URL } from '@/config/contracts';
 
-// Types
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
 interface Project {
     id: number;
     name: string;
     location: string | null;
     default_rate_per_hour: number;
     worker_count: number;
+    created_at: string;
 }
 
 interface Worker {
-    id: string;
+    id: number;
     full_name: string;
     phone: string | null;
     wallet_address: string | null;
@@ -22,547 +26,1034 @@ interface Worker {
     project_name: string | null;
     rate_per_hour: number | null;
     status: string;
+    created_at: string;
 }
 
-// Tab type
-type Tab = 'projects' | 'workers' | 'shifts' | 'reviews';
+interface ShiftResponse {
+    id: number;
+    worker_id: number;
+    project_id: number;
+    project_name: string | null;
+    date: string;
+    hours_worked: number;
+    work_units: number;
+    earned: number;
+    notes: string | null;
+}
+
+interface ReviewResponse {
+    id: number;
+    worker_id: number;
+    review_date: string;
+    rating: number;
+    comment: string | null;
+    reviewer_name: string | null;
+}
+
+type Tab = 'projects' | 'workers';
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function ManagerPage() {
-    // Auth
-    const [token, setToken] = useState('');
+    // ── Auth ──
+    const DEFAULT_DEV_TOKEN = 'manager-secret-token';
+    const [tokenInput, setTokenInput] = useState(DEFAULT_DEV_TOKEN);
     const [savedToken, setSavedToken] = useState('');
+    const [authVerified, setAuthVerified] = useState(false);
+    const [authChecking, setAuthChecking] = useState(false);
+    const [showToken, setShowToken] = useState(false);
+    const [authError, setAuthError] = useState('');
 
-    // Data
+    // ── Data ──
     const [projects, setProjects] = useState<Project[]>([]);
     const [workers, setWorkers] = useState<Worker[]>([]);
-    const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
 
-    // UI State
+    // ── Worker detail panel ──
+    const [expandedWorkerId, setExpandedWorkerId] = useState<number | null>(null);
+    const [workerShifts, setWorkerShifts] = useState<ShiftResponse[]>([]);
+    const [workerReviews, setWorkerReviews] = useState<ReviewResponse[]>([]);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    // ── UI ──
     const [activeTab, setActiveTab] = useState<Tab>('projects');
     const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
-    const [error, setError] = useState('');
+    const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-    // Form states
+    // ── Forms ──
     const [projectForm, setProjectForm] = useState({ name: '', location: '', default_rate_per_hour: 500 });
     const [workerForm, setWorkerForm] = useState({ full_name: '', phone: '', wallet_address: '', project_id: '', rate_per_hour: '' });
     const [shiftForm, setShiftForm] = useState({ date: new Date().toISOString().split('T')[0], hours_worked: 8, notes: '' });
     const [reviewForm, setReviewForm] = useState({ review_date: new Date().toISOString().split('T')[0], rating: 5, comment: '', reviewer_name: '' });
-    const [linkWalletForm, setLinkWalletForm] = useState({ wallet_address: '' });
+    const [linkWalletInput, setLinkWalletInput] = useState('');
 
-    // Load token from localStorage on mount
-    useEffect(() => {
-        const stored = localStorage.getItem('manager_token');
-        if (stored) {
-            setSavedToken(stored);
-            setToken(stored);
+    // ── Edit worker modal ──
+    const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
+    const [editForm, setEditForm] = useState({ full_name: '', phone: '', project_id: '', rate_per_hour: '', status: '' });
+
+    /* ── Toast helper ── */
+    const flash = useCallback((type: 'success' | 'error', text: string) => {
+        setToast({ type, text });
+        setTimeout(() => setToast(null), 4000);
+    }, []);
+
+    /* ── Generic API caller ── */
+    const api = useCallback(async (endpoint: string, method = 'GET', body?: unknown, token?: string) => {
+        const tkn = token || savedToken;
+        if (!tkn) throw new Error('Not authenticated');
+        const res = await fetch(`${API_URL}${endpoint}`, {
+            method,
+            headers: {
+                Authorization: `Bearer ${tkn}`,
+                'Content-Type': 'application/json',
+            },
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+            throw new Error(err.detail || 'Request failed');
+        }
+        return res.json();
+    }, [savedToken]);
+
+    /* ── Verify token against API ── */
+    const verifyToken = useCallback(async (token: string): Promise<{ ok: boolean; error?: string }> => {
+        try {
+            const res = await fetch(`${API_URL}/manager/verify`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+            if (res.ok) return { ok: true };
+            const data = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+            return { ok: false, error: data.detail || `Server returned ${res.status}` };
+        } catch (err) {
+            return { ok: false, error: `Cannot reach API at ${API_URL}. Is the backend running?` };
         }
     }, []);
 
-    // Save token
-    const handleSaveToken = () => {
-        localStorage.setItem('manager_token', token);
-        setSavedToken(token);
-        setMessage('Token saved!');
-        setTimeout(() => setMessage(''), 2000);
-    };
+    /* ── Load saved token and auto-authenticate ── */
+    useEffect(() => {
+        const stored = localStorage.getItem('manager_token');
+        const tokenToUse = stored ? stored.trim() : DEFAULT_DEV_TOKEN;
 
-    // API helper
-    const apiCall = async (endpoint: string, method: string = 'GET', body?: any) => {
-        const headers: Record<string, string> = {
-            'Authorization': `Bearer ${savedToken}`,
-            'Content-Type': 'application/json',
-        };
+        setTokenInput(tokenToUse);
+        setSavedToken(tokenToUse);
+        setAuthChecking(true);
 
-        const res = await fetch(`${API_URL}${endpoint}`, {
-            method,
-            headers,
-            body: body ? JSON.stringify(body) : undefined,
+        verifyToken(tokenToUse).then(result => {
+            setAuthChecking(false);
+            if (result.ok) {
+                localStorage.setItem('manager_token', tokenToUse);
+                setSavedToken(tokenToUse);
+                setAuthVerified(true);
+            } else {
+                // If stored token failed, try the default dev token as fallback
+                if (stored && tokenToUse !== DEFAULT_DEV_TOKEN) {
+                    setTokenInput(DEFAULT_DEV_TOKEN);
+                    setSavedToken(DEFAULT_DEV_TOKEN);
+                    verifyToken(DEFAULT_DEV_TOKEN).then(fallback => {
+                        if (fallback.ok) {
+                            localStorage.setItem('manager_token', DEFAULT_DEV_TOKEN);
+                            setSavedToken(DEFAULT_DEV_TOKEN);
+                            setAuthVerified(true);
+                        } else {
+                            localStorage.removeItem('manager_token');
+                            setSavedToken('');
+                            setAuthError(fallback.error || 'Token invalid');
+                        }
+                    });
+                } else {
+                    localStorage.removeItem('manager_token');
+                    setSavedToken('');
+                    setTokenInput(DEFAULT_DEV_TOKEN);
+                    setAuthError(result.error || 'Cannot connect to API');
+                }
+            }
         });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-            throw new Error(err.detail || 'Request failed');
+    /* ── Save & verify token ── */
+    const handleSaveToken = async () => {
+        const clean = tokenInput.trim();
+        if (!clean) { flash('error', 'Enter a token first'); return; }
+
+        setAuthChecking(true);
+        setAuthError('');
+        const result = await verifyToken(clean);
+        setAuthChecking(false);
+
+        if (result.ok) {
+            localStorage.setItem('manager_token', clean);
+            setSavedToken(clean);
+            setAuthVerified(true);
+            setAuthError('');
+            flash('success', 'Token verified and saved');
+        } else {
+            setAuthVerified(false);
+            setAuthError(result.error || 'Token invalid');
+            flash('error', result.error || 'Invalid token');
         }
-
-        return res.json();
     };
 
-    // Fetch projects
-    const fetchProjects = async () => {
-        if (!savedToken) return;
+    const handleClearToken = () => {
+        localStorage.removeItem('manager_token');
+        setSavedToken('');
+        setTokenInput('');
+        setAuthVerified(false);
+        setProjects([]);
+        setWorkers([]);
+        flash('success', 'Logged out');
+    };
+
+    /* ── Fetch data ── */
+    const fetchProjects = useCallback(async () => {
+        if (!savedToken || !authVerified) return;
+        try { setProjects(await api('/manager/projects')); }
+        catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to load projects';
+            flash('error', msg);
+        }
+    }, [savedToken, authVerified, api, flash]);
+
+    const fetchWorkers = useCallback(async () => {
+        if (!savedToken || !authVerified) return;
+        try { setWorkers(await api('/manager/workers')); }
+        catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to load workers';
+            flash('error', msg);
+        }
+    }, [savedToken, authVerified, api, flash]);
+
+    const fetchAll = useCallback(async () => {
         setLoading(true);
+        await Promise.all([fetchProjects(), fetchWorkers()]);
+        setLoading(false);
+    }, [fetchProjects, fetchWorkers]);
+
+    useEffect(() => { if (savedToken && authVerified) fetchAll(); }, [savedToken, authVerified, fetchAll]);
+
+    /* ── Fetch worker detail (shifts + reviews) ── */
+    const fetchWorkerDetail = useCallback(async (workerId: number) => {
+        setDetailLoading(true);
         try {
-            const data = await apiCall('/manager/projects');
-            setProjects(data);
-        } catch (e: any) {
-            setError(e.message);
+            const [shifts, reviews] = await Promise.all([
+                api(`/manager/workers/${workerId}/shifts`),
+                api(`/manager/workers/${workerId}/reviews`),
+            ]);
+            setWorkerShifts(shifts);
+            setWorkerReviews(reviews);
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to load details';
+            flash('error', msg);
         } finally {
-            setLoading(false);
+            setDetailLoading(false);
+        }
+    }, [api, flash]);
+
+    /* ── Toggle worker expand ── */
+    const toggleWorkerExpand = (workerId: number) => {
+        if (expandedWorkerId === workerId) {
+            setExpandedWorkerId(null);
+        } else {
+            setExpandedWorkerId(workerId);
+            fetchWorkerDetail(workerId);
         }
     };
 
-    // Fetch workers
-    const fetchWorkers = async () => {
-        if (!savedToken) return;
-        setLoading(true);
-        try {
-            const data = await apiCall('/manager/workers');
-            setWorkers(data);
-        } catch (e: any) {
-            setError(e.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Create project
+    /* ── Create Project ── */
     const handleCreateProject = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
+        if (!projectForm.name.trim()) { flash('error', 'Project name is required'); return; }
         try {
-            await apiCall('/manager/projects', 'POST', projectForm);
-            setMessage('Project created!');
+            await api('/manager/projects', 'POST', {
+                name: projectForm.name.trim(),
+                location: projectForm.location.trim() || null,
+                default_rate_per_hour: projectForm.default_rate_per_hour,
+            });
+            flash('success', `Project "${projectForm.name}" created`);
             setProjectForm({ name: '', location: '', default_rate_per_hour: 500 });
-            fetchProjects();
-        } catch (e: any) {
-            setError(e.message);
+            fetchAll(); // Refresh both to update worker counts
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to create project';
+            flash('error', msg);
         }
     };
 
-    // Create worker
+    /* ── Create Worker ── */
     const handleCreateWorker = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
+        if (!workerForm.full_name.trim()) { flash('error', 'Worker name is required'); return; }
         try {
-            const body: any = { full_name: workerForm.full_name };
-            if (workerForm.phone) body.phone = workerForm.phone;
-            if (workerForm.wallet_address) body.wallet_address = workerForm.wallet_address;
+            const body: Record<string, unknown> = { full_name: workerForm.full_name.trim() };
+            if (workerForm.phone.trim()) body.phone = workerForm.phone.trim();
+            if (workerForm.wallet_address.trim()) body.wallet_address = workerForm.wallet_address.trim();
             if (workerForm.project_id) body.project_id = parseInt(workerForm.project_id);
             if (workerForm.rate_per_hour) body.rate_per_hour = parseInt(workerForm.rate_per_hour);
 
-            await apiCall('/manager/workers', 'POST', body);
-            setMessage('Worker created!');
+            await api('/manager/workers', 'POST', body);
+            flash('success', `Worker "${workerForm.full_name}" added`);
             setWorkerForm({ full_name: '', phone: '', wallet_address: '', project_id: '', rate_per_hour: '' });
-            fetchWorkers();
-        } catch (e: any) {
-            setError(e.message);
+            fetchAll(); // Refresh both to update project worker counts
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to create worker';
+            flash('error', msg);
         }
     };
 
-    // Link wallet
-    const handleLinkWallet = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedWorker) return;
-        setError('');
+    /* ── Edit Worker ── */
+    const openEditWorker = (w: Worker) => {
+        setEditingWorker(w);
+        setEditForm({
+            full_name: w.full_name,
+            phone: w.phone || '',
+            project_id: w.project_id ? String(w.project_id) : '',
+            rate_per_hour: w.rate_per_hour ? String(w.rate_per_hour) : '',
+            status: w.status,
+        });
+    };
+
+    const handleEditWorker = async () => {
+        if (!editingWorker) return;
         try {
-            await apiCall(`/manager/workers/${selectedWorker.id}`, 'PATCH', { wallet_address: linkWalletForm.wallet_address });
-            setMessage('Wallet linked!');
-            setLinkWalletForm({ wallet_address: '' });
-            fetchWorkers();
-            setSelectedWorker(null);
-        } catch (e: any) {
-            setError(e.message);
+            const body: Record<string, unknown> = {};
+            if (editForm.full_name.trim() !== editingWorker.full_name) body.full_name = editForm.full_name.trim();
+            if ((editForm.phone || '') !== (editingWorker.phone || '')) body.phone = editForm.phone.trim() || null;
+            if (editForm.project_id !== (editingWorker.project_id ? String(editingWorker.project_id) : '')) {
+                body.project_id = editForm.project_id ? parseInt(editForm.project_id) : null;
+            }
+            if (editForm.rate_per_hour !== (editingWorker.rate_per_hour ? String(editingWorker.rate_per_hour) : '')) {
+                body.rate_per_hour = editForm.rate_per_hour ? parseInt(editForm.rate_per_hour) : null;
+            }
+            if (editForm.status !== editingWorker.status) body.status = editForm.status;
+
+            if (Object.keys(body).length === 0) {
+                flash('error', 'No changes to save');
+                return;
+            }
+
+            await api(`/manager/workers/${editingWorker.id}`, 'PATCH', body);
+            flash('success', `Worker "${editForm.full_name}" updated`);
+            setEditingWorker(null);
+            fetchAll();
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to update worker';
+            flash('error', msg);
         }
     };
 
-    // Add shift
-    const handleAddShift = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedWorker) return;
-        setError('');
+    /* ── Link Wallet ── */
+    const handleLinkWallet = async (workerId: number) => {
+        const addr = linkWalletInput.trim();
+        if (!addr) { flash('error', 'Enter a wallet address'); return; }
+        if (!addr.startsWith('0x') || addr.length !== 42) {
+            flash('error', 'Invalid wallet address format (0x... 42 chars)');
+            return;
+        }
         try {
-            const body: any = {
+            await api(`/manager/workers/${workerId}`, 'PATCH', { wallet_address: addr });
+            flash('success', 'Wallet linked successfully');
+            setLinkWalletInput('');
+            fetchAll();
+            if (expandedWorkerId === workerId) fetchWorkerDetail(workerId);
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to link wallet';
+            flash('error', msg);
+        }
+    };
+
+    /* ── Add Shift ── */
+    const handleAddShift = async (workerId: number) => {
+        if (!shiftForm.date || shiftForm.hours_worked <= 0) {
+            flash('error', 'Date and hours are required');
+            return;
+        }
+        try {
+            const body: Record<string, unknown> = {
                 date: shiftForm.date,
                 hours_worked: shiftForm.hours_worked,
             };
-            if (shiftForm.notes) body.notes = shiftForm.notes;
-
-            await apiCall(`/manager/workers/${selectedWorker.id}/shifts`, 'POST', body);
-            setMessage('Shift added!');
+            if (shiftForm.notes.trim()) body.notes = shiftForm.notes.trim();
+            await api(`/manager/workers/${workerId}/shifts`, 'POST', body);
+            flash('success', 'Shift logged');
             setShiftForm({ date: new Date().toISOString().split('T')[0], hours_worked: 8, notes: '' });
-        } catch (e: any) {
-            setError(e.message);
+            fetchWorkerDetail(workerId);
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to add shift';
+            flash('error', msg);
         }
     };
 
-    // Add review
-    const handleAddReview = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedWorker) return;
-        setError('');
+    /* ── Add Review ── */
+    const handleAddReview = async (workerId: number) => {
+        if (!reviewForm.review_date) { flash('error', 'Review date is required'); return; }
         try {
-            const body: any = {
+            const body: Record<string, unknown> = {
                 review_date: reviewForm.review_date,
                 rating: reviewForm.rating,
             };
-            if (reviewForm.comment) body.comment = reviewForm.comment;
-            if (reviewForm.reviewer_name) body.reviewer_name = reviewForm.reviewer_name;
-
-            await apiCall(`/manager/workers/${selectedWorker.id}/reviews`, 'POST', body);
-            setMessage('Review added!');
+            if (reviewForm.comment.trim()) body.comment = reviewForm.comment.trim();
+            if (reviewForm.reviewer_name.trim()) body.reviewer_name = reviewForm.reviewer_name.trim();
+            await api(`/manager/workers/${workerId}/reviews`, 'POST', body);
+            flash('success', 'Review added');
             setReviewForm({ review_date: new Date().toISOString().split('T')[0], rating: 5, comment: '', reviewer_name: '' });
-        } catch (e: any) {
-            setError(e.message);
+            fetchWorkerDetail(workerId);
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to add review';
+            flash('error', msg);
         }
     };
 
-    // Load data when token changes
-    useEffect(() => {
-        if (savedToken) {
-            fetchProjects();
-            fetchWorkers();
-        }
-    }, [savedToken]);
+    /* ── Helpers ── */
+    const renderStars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
+    const workersForProject = (pid: number) => workers.filter(w => w.project_id === pid);
+    const unassignedWorkers = workers.filter(w => !w.project_id);
+
+    /* ================================================================ */
+    /*  RENDER                                                          */
+    /* ================================================================ */
 
     return (
         <div className="container synapse-page">
             <Navigation />
 
-            <main style={{ paddingTop: 48 }}>
-                <h1 className="synapse-page-title" style={{ marginTop: 32, marginBottom: 24 }}>Manager Portal</h1>
+            <main style={{ paddingTop: 48, maxWidth: 960, margin: '0 auto' }}>
+                <h1 className="synapse-page-title" style={{ marginTop: 32, marginBottom: 8 }}>
+                    Manager Portal
+                </h1>
+                <p style={{ marginBottom: 32, color: 'rgba(163,163,163,1)', fontSize: 15 }}>
+                    Manage projects, assign workers, log shifts and reviews.
+                </p>
 
-                {/* Token Input */}
-                <div className="card" style={{ marginBottom: 24 }}>
-                    <h2 className="synapse-heading" style={{ marginBottom: 16 }}>Authentication</h2>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                            type="password"
-                            placeholder="Manager Token"
-                            value={token}
-                            onChange={(e) => setToken(e.target.value)}
-                            style={{ flex: 1, minWidth: 200 }}
-                        />
-                        <button className="btn btn-primary" onClick={handleSaveToken}>
-                            Save Token
-                        </button>
+                {/* ── Toast ── */}
+                {toast && (
+                    <div
+                        style={{
+                            position: 'fixed', top: 24, right: 24, zIndex: 9999,
+                            padding: '14px 24px', borderRadius: 10,
+                            background: toast.type === 'success' ? 'rgba(16,185,129,.15)' : 'rgba(239,68,68,.15)',
+                            border: `1px solid ${toast.type === 'success' ? 'rgba(16,185,129,.4)' : 'rgba(239,68,68,.4)'}`,
+                            color: toast.type === 'success' ? '#10b981' : '#ef4444',
+                            fontSize: 14, fontWeight: 500,
+                            backdropFilter: 'blur(12px)',
+                            maxWidth: 400,
+                        }}
+                    >
+                        {toast.type === 'success' ? '✓' : '✗'} {toast.text}
                     </div>
-                    {savedToken && (
-                        <p style={{ marginTop: 8, color: 'var(--synapse-emerald)', fontSize: 14 }}>
-                            ✓ Token saved
+                )}
+
+                {/* ── Edit Worker Modal ── */}
+                {editingWorker && (
+                    <div style={{
+                        position: 'fixed', inset: 0, zIndex: 9998,
+                        background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }} onClick={() => setEditingWorker(null)}>
+                        <div
+                            style={{
+                                background: '#1a1a2e', border: '1px solid rgba(255,255,255,.1)',
+                                borderRadius: 16, padding: 32, width: 440, maxWidth: '90vw',
+                            }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <h3 style={{ margin: '0 0 20px', fontSize: 18 }}>Edit Worker</h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <input
+                                    type="text"
+                                    placeholder="Full name"
+                                    value={editForm.full_name}
+                                    onChange={e => setEditForm({ ...editForm, full_name: e.target.value })}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Phone"
+                                    value={editForm.phone}
+                                    onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                                />
+                                <select
+                                    value={editForm.project_id}
+                                    onChange={e => setEditForm({ ...editForm, project_id: e.target.value })}
+                                >
+                                    <option value="">No project</option>
+                                    {projects.map(p => (
+                                        <option key={p.id} value={String(p.id)}>{p.name}</option>
+                                    ))}
+                                </select>
+                                <input
+                                    type="number"
+                                    placeholder="Custom rate ₹/hr"
+                                    value={editForm.rate_per_hour}
+                                    onChange={e => setEditForm({ ...editForm, rate_per_hour: e.target.value })}
+                                />
+                                <select
+                                    value={editForm.status}
+                                    onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                                >
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                                <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                                    <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleEditWorker}>
+                                        Save Changes
+                                    </button>
+                                    <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setEditingWorker(null)}>
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Auth Card ── */}
+                <div className="card" style={{ marginBottom: 32 }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+                            <input
+                                type={showToken ? 'text' : 'password'}
+                                placeholder="Enter manager token..."
+                                value={tokenInput}
+                                onChange={e => { setTokenInput(e.target.value); setAuthError(''); }}
+                                onKeyDown={e => e.key === 'Enter' && handleSaveToken()}
+                                style={{ width: '100%', paddingRight: 44 }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowToken(!showToken)}
+                                style={{
+                                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    color: 'rgba(163,163,163,.6)', fontSize: 13, padding: '4px 6px',
+                                }}
+                            >
+                                {showToken ? 'Hide' : 'Show'}
+                            </button>
+                        </div>
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleSaveToken}
+                            disabled={authChecking}
+                        >
+                            {authChecking ? 'Verifying...' : authVerified ? 'Update Token' : 'Authenticate'}
+                        </button>
+                        {authVerified && (
+                            <button
+                                className="btn btn-secondary"
+                                onClick={handleClearToken}
+                                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,.25)' }}
+                            >
+                                Logout
+                            </button>
+                        )}
+                    </div>
+                    {authChecking && (
+                        <p style={{ marginTop: 8, color: '#f59e0b', fontSize: 13 }}>
+                            Verifying token with API at {API_URL}...
                         </p>
+                    )}
+                    {!authChecking && authVerified && (
+                        <p style={{ marginTop: 8, color: '#10b981', fontSize: 13 }}>
+                            ✓ Authenticated — token verified with server
+                        </p>
+                    )}
+                    {!authChecking && authError && (
+                        <p style={{ marginTop: 8, color: '#ef4444', fontSize: 13 }}>
+                            ✗ {authError}
+                        </p>
+                    )}
+                    {!authChecking && !authVerified && !authError && (
+                        <div style={{ marginTop: 8 }}>
+                            <p style={{ color: 'rgba(163,163,163,.6)', fontSize: 13, margin: 0 }}>
+                                Enter the manager admin token and click Authenticate.
+                            </p>
+                            <p style={{ color: 'rgba(163,163,163,.4)', fontSize: 12, margin: '4px 0 0' }}>
+                                Default dev token: <code
+                                    onClick={() => { setTokenInput('manager-secret-token'); setAuthError(''); }}
+                                    style={{
+                                        background: 'rgba(167,139,250,.1)', color: '#a78bfa',
+                                        padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
+                                        fontSize: 12, fontFamily: 'monospace',
+                                    }}
+                                >manager-secret-token</code>
+                                <span style={{ marginLeft: 4, color: 'rgba(163,163,163,.3)' }}>(click to fill)</span>
+                            </p>
+                        </div>
                     )}
                 </div>
 
-                {/* Messages */}
-                {message && (
-                    <div className="synapse-alert synapse-alert-success" style={{ marginBottom: 16 }}>
-                        {message}
-                    </div>
-                )}
-                {error && (
-                    <div className="synapse-alert synapse-alert-error" style={{ marginBottom: 16 }}>
-                        {error}
-                    </div>
-                )}
-
-                {savedToken && (
+                {/* ── Main content (only when authenticated AND verified) ── */}
+                {authVerified && (
                     <>
-                        {/* Tabs */}
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-                            {(['projects', 'workers', 'shifts', 'reviews'] as Tab[]).map((tab) => (
+                        {/* ── Tab bar ── */}
+                        <div style={{
+                            display: 'flex', gap: 0, marginBottom: 32,
+                            borderBottom: '1px solid rgba(255,255,255,.08)',
+                        }}>
+                            {(['projects', 'workers'] as Tab[]).map(tab => (
                                 <button
                                     key={tab}
-                                    className={`btn ${activeTab === tab ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setActiveTab(tab)}
+                                    style={{
+                                        padding: '12px 28px',
+                                        background: 'none',
+                                        border: 'none',
+                                        borderBottom: activeTab === tab ? '2px solid #a78bfa' : '2px solid transparent',
+                                        color: activeTab === tab ? '#fff' : 'rgba(163,163,163,.8)',
+                                        fontSize: 15, fontWeight: 500,
+                                        cursor: 'pointer',
+                                        transition: 'all .2s',
+                                    }}
                                 >
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                    {tab === 'projects' ? 'Projects' : 'Workers'}
                                 </button>
                             ))}
+                            {loading && (
+                                <span style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 13, color: 'rgba(163,163,163,.6)' }}>
+                                    Loading...
+                                </span>
+                            )}
+                            <button
+                                onClick={fetchAll}
+                                style={{
+                                    marginLeft: 'auto', background: 'none', border: 'none',
+                                    color: 'rgba(163,163,163,.6)', cursor: 'pointer', fontSize: 13,
+                                    alignSelf: 'center',
+                                }}
+                            >
+                                Refresh
+                            </button>
                         </div>
 
-                        {/* Projects Tab */}
+                        {/* ============================================ */}
+                        {/*  PROJECTS TAB                                */}
+                        {/* ============================================ */}
                         {activeTab === 'projects' && (
-                            <div className="card">
-                                <h2 className="synapse-heading" style={{ marginBottom: 16 }}>Create Project</h2>
-                                <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Project Name *"
-                                        value={projectForm.name}
-                                        onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })}
-                                        required
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="Location (optional)"
-                                        value={projectForm.location}
-                                        onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })}
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Default Rate/Hour (₹)"
-                                        value={projectForm.default_rate_per_hour}
-                                        onChange={(e) => setProjectForm({ ...projectForm, default_rate_per_hour: parseInt(e.target.value) || 0 })}
-                                    />
-                                    <button type="submit" className="btn btn-primary">Create Project</button>
-                                </form>
-
-                                <h3 className="synapse-heading" style={{ marginTop: 24, marginBottom: 16 }}>Projects</h3>
-                                {loading ? (
-                                    <p>Loading...</p>
-                                ) : projects.length === 0 ? (
-                                    <p style={{ color: 'rgba(163,163,163,1)' }}>No projects yet.</p>
-                                ) : (
-                                    <table className="synapse-table">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Name</th>
-                                                <th>Location</th>
-                                                <th>Rate/Hr</th>
-                                                <th>Workers</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {projects.map((p) => (
-                                                <tr key={p.id}>
-                                                    <td>{p.id}</td>
-                                                    <td>{p.name}</td>
-                                                    <td>{p.location || '-'}</td>
-                                                    <td>₹{p.default_rate_per_hour}</td>
-                                                    <td>{p.worker_count}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Workers Tab */}
-                        {activeTab === 'workers' && (
-                            <div className="card">
-                                <h2 className="synapse-heading" style={{ marginBottom: 16 }}>Create Worker</h2>
-                                <form onSubmit={handleCreateWorker} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Full Name *"
-                                        value={workerForm.full_name}
-                                        onChange={(e) => setWorkerForm({ ...workerForm, full_name: e.target.value })}
-                                        required
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="Phone (optional)"
-                                        value={workerForm.phone}
-                                        onChange={(e) => setWorkerForm({ ...workerForm, phone: e.target.value })}
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="Wallet Address (optional, 0x...)"
-                                        value={workerForm.wallet_address}
-                                        onChange={(e) => setWorkerForm({ ...workerForm, wallet_address: e.target.value })}
-                                    />
-                                    <select
-                                        value={workerForm.project_id}
-                                        onChange={(e) => setWorkerForm({ ...workerForm, project_id: e.target.value })}
-                                    >
-                                        <option value="">Select Project (optional)</option>
-                                        {projects.map((p) => (
-                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                        ))}
-                                    </select>
-                                    <input
-                                        type="number"
-                                        placeholder="Custom Rate/Hour (optional, ₹)"
-                                        value={workerForm.rate_per_hour}
-                                        onChange={(e) => setWorkerForm({ ...workerForm, rate_per_hour: e.target.value })}
-                                    />
-                                    <button type="submit" className="btn btn-primary">Create Worker</button>
-                                </form>
-
-                                <h3 className="synapse-heading" style={{ marginTop: 24, marginBottom: 16 }}>Workers</h3>
-                                {loading ? (
-                                    <p>Loading...</p>
-                                ) : workers.length === 0 ? (
-                                    <p style={{ color: 'rgba(163,163,163,1)' }}>No workers yet.</p>
-                                ) : (
-                                    <table className="synapse-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Name</th>
-                                                <th>Project</th>
-                                                <th>Rate</th>
-                                                <th>Wallet</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {workers.map((w) => (
-                                                <tr key={w.id}>
-                                                    <td>{w.full_name}</td>
-                                                    <td>{w.project_name || '-'}</td>
-                                                    <td>{w.rate_per_hour ? `₹${w.rate_per_hour}` : 'Default'}</td>
-                                                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>
-                                                        {w.wallet_address ? `${w.wallet_address.slice(0, 6)}...${w.wallet_address.slice(-4)}` : 'Not linked'}
-                                                    </td>
-                                                    <td>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            style={{ padding: '4px 8px', fontSize: 12 }}
-                                                            onClick={() => {
-                                                                setSelectedWorker(w);
-                                                                setActiveTab('shifts');
-                                                            }}
-                                                        >
-                                                            Select
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Shifts Tab */}
-                        {activeTab === 'shifts' && (
-                            <div className="card">
-                                <h2 className="synapse-heading" style={{ marginBottom: 16 }}>Add Shift / Link Wallet</h2>
-
-                                {/* Worker Select */}
-                                <div style={{ marginBottom: 16 }}>
-                                    <label style={{ display: 'block', marginBottom: 8 }}>Select Worker:</label>
-                                    <select
-                                        value={selectedWorker?.id || ''}
-                                        onChange={(e) => {
-                                            const w = workers.find(w => w.id === e.target.value);
-                                            setSelectedWorker(w || null);
-                                        }}
-                                        style={{ width: '100%' }}
-                                    >
-                                        <option value="">Choose a worker...</option>
-                                        {workers.map((w) => (
-                                            <option key={w.id} value={w.id}>{w.full_name} ({w.project_name || 'No project'})</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {selectedWorker && (
-                                    <>
-                                        <div style={{ padding: 12, background: 'rgba(16,185,129,0.1)', borderRadius: 8, marginBottom: 16 }}>
-                                            <strong>Selected:</strong> {selectedWorker.full_name}
-                                            {selectedWorker.wallet_address && (
-                                                <span style={{ marginLeft: 8, fontFamily: 'monospace', fontSize: 12 }}>
-                                                    ({selectedWorker.wallet_address.slice(0, 10)}...)
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Link Wallet Form */}
-                                        {!selectedWorker.wallet_address && (
-                                            <div style={{ marginBottom: 24, padding: 16, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}>
-                                                <h3 style={{ marginBottom: 12 }}>Link Wallet</h3>
-                                                <form onSubmit={handleLinkWallet} style={{ display: 'flex', gap: 12 }}>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Wallet Address (0x...)"
-                                                        value={linkWalletForm.wallet_address}
-                                                        onChange={(e) => setLinkWalletForm({ wallet_address: e.target.value })}
-                                                        style={{ flex: 1 }}
-                                                        required
-                                                    />
-                                                    <button type="submit" className="btn btn-primary">Link</button>
-                                                </form>
-                                            </div>
-                                        )}
-
-                                        {/* Add Shift Form */}
-                                        <h3 style={{ marginBottom: 12 }}>Add Shift</h3>
-                                        <form onSubmit={handleAddShift} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                            <input
-                                                type="date"
-                                                value={shiftForm.date}
-                                                onChange={(e) => setShiftForm({ ...shiftForm, date: e.target.value })}
-                                                required
-                                            />
+                            <>
+                                {/* Create project form */}
+                                <div className="card" style={{ marginBottom: 32 }}>
+                                    <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>New Project</h2>
+                                    <form onSubmit={handleCreateProject} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Project name *"
+                                            value={projectForm.name}
+                                            onChange={e => setProjectForm({ ...projectForm, name: e.target.value })}
+                                            required
+                                            style={{ gridColumn: '1 / -1' }}
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Location (optional)"
+                                            value={projectForm.location}
+                                            onChange={e => setProjectForm({ ...projectForm, location: e.target.value })}
+                                        />
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                            <span style={{ whiteSpace: 'nowrap', fontSize: 14, color: 'rgba(163,163,163,1)' }}>₹/hr</span>
                                             <input
                                                 type="number"
-                                                placeholder="Hours Worked"
-                                                value={shiftForm.hours_worked}
-                                                onChange={(e) => setShiftForm({ ...shiftForm, hours_worked: parseFloat(e.target.value) || 0 })}
-                                                step="0.5"
-                                                required
+                                                min={0}
+                                                value={projectForm.default_rate_per_hour}
+                                                onChange={e => setProjectForm({ ...projectForm, default_rate_per_hour: parseInt(e.target.value) || 0 })}
+                                                style={{ flex: 1 }}
                                             />
-                                            <input
-                                                type="text"
-                                                placeholder="Notes (optional)"
-                                                value={shiftForm.notes}
-                                                onChange={(e) => setShiftForm({ ...shiftForm, notes: e.target.value })}
-                                            />
-                                            <button type="submit" className="btn btn-primary">Add Shift</button>
-                                        </form>
-                                    </>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Reviews Tab */}
-                        {activeTab === 'reviews' && (
-                            <div className="card">
-                                <h2 className="synapse-heading" style={{ marginBottom: 16 }}>Add Performance Review</h2>
-
-                                {/* Worker Select */}
-                                <div style={{ marginBottom: 16 }}>
-                                    <label style={{ display: 'block', marginBottom: 8 }}>Select Worker:</label>
-                                    <select
-                                        value={selectedWorker?.id || ''}
-                                        onChange={(e) => {
-                                            const w = workers.find(w => w.id === e.target.value);
-                                            setSelectedWorker(w || null);
-                                        }}
-                                        style={{ width: '100%' }}
-                                    >
-                                        <option value="">Choose a worker...</option>
-                                        {workers.map((w) => (
-                                            <option key={w.id} value={w.id}>{w.full_name}</option>
-                                        ))}
-                                    </select>
+                                        </div>
+                                        <button id="manager-create-project-btn" type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1' }}>
+                                            Create Project
+                                        </button>
+                                    </form>
                                 </div>
 
-                                {selectedWorker && (
-                                    <>
-                                        <div style={{ padding: 12, background: 'rgba(16,185,129,0.1)', borderRadius: 8, marginBottom: 16 }}>
-                                            <strong>Selected:</strong> {selectedWorker.full_name}
-                                        </div>
+                                {/* Stats row */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+                                    <div className="card" style={{ textAlign: 'center', padding: 20 }}>
+                                        <div style={{ fontSize: 28, fontWeight: 700, color: '#a78bfa' }}>{projects.length}</div>
+                                        <div style={{ fontSize: 13, color: 'rgba(163,163,163,.8)' }}>Projects</div>
+                                    </div>
+                                    <div className="card" style={{ textAlign: 'center', padding: 20 }}>
+                                        <div style={{ fontSize: 28, fontWeight: 700, color: '#10b981' }}>{workers.length}</div>
+                                        <div style={{ fontSize: 13, color: 'rgba(163,163,163,.8)' }}>Workers</div>
+                                    </div>
+                                    <div className="card" style={{ textAlign: 'center', padding: 20 }}>
+                                        <div style={{ fontSize: 28, fontWeight: 700, color: '#f59e0b' }}>{workers.filter(w => w.status === 'active').length}</div>
+                                        <div style={{ fontSize: 13, color: 'rgba(163,163,163,.8)' }}>Active</div>
+                                    </div>
+                                </div>
 
-                                        <form onSubmit={handleAddReview} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                            <input
-                                                type="date"
-                                                value={reviewForm.review_date}
-                                                onChange={(e) => setReviewForm({ ...reviewForm, review_date: e.target.value })}
-                                                required
-                                            />
-                                            <div>
-                                                <label style={{ display: 'block', marginBottom: 8 }}>Rating: {reviewForm.rating} ★</label>
-                                                <input
-                                                    type="range"
-                                                    min="1"
-                                                    max="5"
-                                                    value={reviewForm.rating}
-                                                    onChange={(e) => setReviewForm({ ...reviewForm, rating: parseInt(e.target.value) })}
-                                                    style={{ width: '100%' }}
-                                                />
+                                {/* Project list with assigned workers */}
+                                {projects.length === 0 ? (
+                                    <div className="card" style={{ textAlign: 'center', padding: 40, color: 'rgba(163,163,163,.6)' }}>
+                                        No projects yet. Create one above.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                        {projects.map(p => {
+                                            const pw = workersForProject(p.id);
+                                            return (
+                                                <div key={p.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                                                    {/* Header */}
+                                                    <div style={{
+                                                        padding: '20px 24px',
+                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                        borderBottom: pw.length > 0 ? '1px solid rgba(255,255,255,.06)' : 'none',
+                                                    }}>
+                                                        <div>
+                                                            <h3 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>{p.name}</h3>
+                                                            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(163,163,163,.8)' }}>
+                                                                {p.location || 'No location'} &middot; ₹{p.default_rate_per_hour}/hr &middot; ID: {p.id}
+                                                            </p>
+                                                        </div>
+                                                        <div style={{
+                                                            background: pw.length > 0 ? 'rgba(167,139,250,.1)' : 'rgba(163,163,163,.08)',
+                                                            color: pw.length > 0 ? '#a78bfa' : 'rgba(163,163,163,.5)',
+                                                            padding: '6px 14px',
+                                                            borderRadius: 20,
+                                                            fontSize: 13, fontWeight: 500,
+                                                        }}>
+                                                            {pw.length} worker{pw.length !== 1 ? 's' : ''}
+                                                        </div>
+                                                    </div>
+                                                    {/* Workers under this project */}
+                                                    {pw.length > 0 && (
+                                                        <div style={{ padding: '12px 24px 16px' }}>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                                                {pw.map(w => (
+                                                                    <span
+                                                                        key={w.id}
+                                                                        onClick={() => { setActiveTab('workers'); setTimeout(() => toggleWorkerExpand(w.id), 100); }}
+                                                                        style={{
+                                                                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                                            padding: '6px 14px', borderRadius: 8,
+                                                                            background: 'rgba(255,255,255,.04)',
+                                                                            border: '1px solid rgba(255,255,255,.08)',
+                                                                            fontSize: 13, cursor: 'pointer',
+                                                                            transition: 'background .15s',
+                                                                        }}
+                                                                    >
+                                                                        <span style={{
+                                                                            width: 8, height: 8, borderRadius: '50%',
+                                                                            background: w.status === 'active' ? '#10b981' : '#6b7280',
+                                                                        }} />
+                                                                        {w.full_name}
+                                                                        {w.wallet_address && (
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'rgba(163,163,163,.6)' }}>
+                                                                                {w.wallet_address.slice(0, 6)}...{w.wallet_address.slice(-4)}
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* Unassigned workers */}
+                                        {unassignedWorkers.length > 0 && (
+                                            <div className="card" style={{ padding: 0, overflow: 'hidden', borderColor: 'rgba(239,68,68,.15)' }}>
+                                                <div style={{
+                                                    padding: '16px 24px',
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                    borderBottom: '1px solid rgba(255,255,255,.06)',
+                                                }}>
+                                                    <div>
+                                                        <h3 style={{ fontSize: 17, fontWeight: 600, margin: 0, color: '#f59e0b' }}>Unassigned</h3>
+                                                        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(163,163,163,.8)' }}>
+                                                            Workers not assigned to any project
+                                                        </p>
+                                                    </div>
+                                                    <div style={{
+                                                        background: 'rgba(245,158,11,.1)', color: '#f59e0b',
+                                                        padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500,
+                                                    }}>
+                                                        {unassignedWorkers.length} worker{unassignedWorkers.length !== 1 ? 's' : ''}
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: '12px 24px 16px' }}>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                                        {unassignedWorkers.map(w => (
+                                                            <span
+                                                                key={w.id}
+                                                                onClick={() => { setActiveTab('workers'); setTimeout(() => toggleWorkerExpand(w.id), 100); }}
+                                                                style={{
+                                                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                                    padding: '6px 14px', borderRadius: 8,
+                                                                    background: 'rgba(255,255,255,.04)',
+                                                                    border: '1px solid rgba(245,158,11,.15)',
+                                                                    fontSize: 13, cursor: 'pointer',
+                                                                }}
+                                                            >
+                                                                <span style={{
+                                                                    width: 8, height: 8, borderRadius: '50%',
+                                                                    background: w.status === 'active' ? '#10b981' : '#6b7280',
+                                                                }} />
+                                                                {w.full_name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <textarea
-                                                placeholder="Comment (optional)"
-                                                value={reviewForm.comment}
-                                                onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
-                                                rows={3}
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Reviewer Name (optional)"
-                                                value={reviewForm.reviewer_name}
-                                                onChange={(e) => setReviewForm({ ...reviewForm, reviewer_name: e.target.value })}
-                                            />
-                                            <button type="submit" className="btn btn-primary">Add Review</button>
-                                        </form>
-                                    </>
+                                        )}
+                                    </div>
                                 )}
-                            </div>
+                            </>
+                        )}
+
+                        {/* ============================================ */}
+                        {/*  WORKERS TAB                                 */}
+                        {/* ============================================ */}
+                        {activeTab === 'workers' && (
+                            <>
+                                {/* Create worker form */}
+                                <div className="card" style={{ marginBottom: 32 }}>
+                                    <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>Add Worker</h2>
+                                    <form onSubmit={handleCreateWorker} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Full name *"
+                                            value={workerForm.full_name}
+                                            onChange={e => setWorkerForm({ ...workerForm, full_name: e.target.value })}
+                                            required
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Phone (optional)"
+                                            value={workerForm.phone}
+                                            onChange={e => setWorkerForm({ ...workerForm, phone: e.target.value })}
+                                        />
+                                        <select
+                                            value={workerForm.project_id}
+                                            onChange={e => setWorkerForm({ ...workerForm, project_id: e.target.value })}
+                                        >
+                                            <option value="">Assign to project...</option>
+                                            {projects.map(p => (
+                                                <option key={p.id} value={String(p.id)}>{p.name} (₹{p.default_rate_per_hour}/hr)</option>
+                                            ))}
+                                        </select>
+                                        <input
+                                            type="number"
+                                            placeholder="Custom ₹/hr (optional)"
+                                            value={workerForm.rate_per_hour}
+                                            onChange={e => setWorkerForm({ ...workerForm, rate_per_hour: e.target.value })}
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Wallet address 0x... (optional)"
+                                            value={workerForm.wallet_address}
+                                            onChange={e => setWorkerForm({ ...workerForm, wallet_address: e.target.value })}
+                                            style={{ gridColumn: '1 / -1' }}
+                                        />
+                                        <button id="manager-add-worker-btn" type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1' }}>
+                                            Add Worker
+                                        </button>
+                                    </form>
+                                    {projects.length === 0 && (
+                                        <p style={{ marginTop: 12, fontSize: 13, color: '#f59e0b' }}>
+                                            Tip: Create a project first in the Projects tab so you can assign workers to it.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Workers list */}
+                                {workers.length === 0 ? (
+                                    <div className="card" style={{ textAlign: 'center', padding: 40, color: 'rgba(163,163,163,.6)' }}>
+                                        No workers yet. Add one above.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        {workers.map(w => {
+                                            const isExpanded = expandedWorkerId === w.id;
+                                            return (
+                                                <div key={w.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                                                    {/* Worker row (clickable to expand) */}
+                                                    <div
+                                                        onClick={() => toggleWorkerExpand(w.id)}
+                                                        style={{
+                                                            padding: '16px 24px',
+                                                            display: 'grid',
+                                                            gridTemplateColumns: '1fr auto auto auto',
+                                                            gap: 16, alignItems: 'center',
+                                                            cursor: 'pointer',
+                                                            transition: 'background .15s',
+                                                        }}
+                                                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.02)')}
+                                                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                                    >
+                                                        <div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                <span style={{
+                                                                    width: 8, height: 8, borderRadius: '50%',
+                                                                    background: w.status === 'active' ? '#10b981' : '#6b7280',
+                                                                }} />
+                                                                <strong style={{ fontSize: 15 }}>{w.full_name}</strong>
+                                                                <span style={{ fontSize: 11, color: 'rgba(163,163,163,.5)' }}>#{w.id}</span>
+                                                            </div>
+                                                            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(163,163,163,.8)' }}>
+                                                                {w.project_name || 'Unassigned'}{w.rate_per_hour ? ` · ₹${w.rate_per_hour}/hr` : ''}
+                                                            </p>
+                                                        </div>
+                                                        <div style={{ fontSize: 12, fontFamily: 'monospace', color: w.wallet_address ? '#10b981' : 'rgba(163,163,163,.5)' }}>
+                                                            {w.wallet_address ? `${w.wallet_address.slice(0, 6)}...${w.wallet_address.slice(-4)}` : 'No wallet'}
+                                                        </div>
+                                                        {w.phone && (
+                                                            <span style={{ fontSize: 13, color: 'rgba(163,163,163,.6)' }}>{w.phone}</span>
+                                                        )}
+                                                        <span style={{
+                                                            fontSize: 18, color: 'rgba(163,163,163,.4)',
+                                                            transition: 'transform .2s',
+                                                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)',
+                                                        }}>
+                                                            ▾
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Expanded detail panel */}
+                                                    {isExpanded && (
+                                                        <div style={{
+                                                            borderTop: '1px solid rgba(255,255,255,.06)',
+                                                            padding: '20px 24px',
+                                                            background: 'rgba(255,255,255,.01)',
+                                                        }}>
+                                                            {/* Quick action bar */}
+                                                            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+                                                                <button
+                                                                    className="btn btn-secondary"
+                                                                    style={{ fontSize: 12, padding: '6px 14px' }}
+                                                                    onClick={(e) => { e.stopPropagation(); openEditWorker(w); }}
+                                                                >
+                                                                    Edit Worker
+                                                                </button>
+                                                                {!w.wallet_address && (
+                                                                    <span style={{ fontSize: 12, color: '#f59e0b', alignSelf: 'center', marginLeft: 8 }}>
+                                                                        No wallet linked
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {detailLoading ? (
+                                                                <p style={{ textAlign: 'center', color: 'rgba(163,163,163,.6)' }}>Loading details...</p>
+                                                            ) : (
+                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                                                                    {/* ── Left: Add Shift ── */}
+                                                                    <div>
+                                                                        <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>Log Shift</h4>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                                            <input type="date" value={shiftForm.date} onChange={e => setShiftForm({ ...shiftForm, date: e.target.value })} />
+                                                                            <input type="number" placeholder="Hours" step="0.5" min="0.5" value={shiftForm.hours_worked} onChange={e => setShiftForm({ ...shiftForm, hours_worked: parseFloat(e.target.value) || 0 })} />
+                                                                            <input type="text" placeholder="Notes (optional)" value={shiftForm.notes} onChange={e => setShiftForm({ ...shiftForm, notes: e.target.value })} />
+                                                                            <button className="btn btn-primary" style={{ padding: '8px 16px', fontSize: 13 }} onClick={() => handleAddShift(w.id)}>
+                                                                                Add Shift
+                                                                            </button>
+                                                                        </div>
+
+                                                                        {/* Shift history */}
+                                                                        {workerShifts.length > 0 && (
+                                                                            <div style={{ marginTop: 16 }}>
+                                                                                <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'rgba(163,163,163,.8)' }}>
+                                                                                    Recent Shifts ({workerShifts.length})
+                                                                                </h4>
+                                                                                <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                                                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                                                                        <thead>
+                                                                                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+                                                                                                <th style={{ textAlign: 'left', padding: '6px 8px', color: 'rgba(163,163,163,.6)', fontWeight: 500 }}>Date</th>
+                                                                                                <th style={{ textAlign: 'left', padding: '6px 8px', color: 'rgba(163,163,163,.6)', fontWeight: 500 }}>Hours</th>
+                                                                                                <th style={{ textAlign: 'left', padding: '6px 8px', color: 'rgba(163,163,163,.6)', fontWeight: 500 }}>Earned</th>
+                                                                                                <th style={{ textAlign: 'left', padding: '6px 8px', color: 'rgba(163,163,163,.6)', fontWeight: 500 }}>Notes</th>
+                                                                                            </tr>
+                                                                                        </thead>
+                                                                                        <tbody>
+                                                                                            {workerShifts.map(s => (
+                                                                                                <tr key={s.id} style={{ borderBottom: '1px solid rgba(255,255,255,.03)' }}>
+                                                                                                    <td style={{ padding: '6px 8px' }}>{s.date}</td>
+                                                                                                    <td style={{ padding: '6px 8px' }}>{s.hours_worked}</td>
+                                                                                                    <td style={{ padding: '6px 8px', color: '#10b981' }}>₹{s.earned.toLocaleString()}</td>
+                                                                                                    <td style={{ padding: '6px 8px', color: 'rgba(163,163,163,.6)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.notes || '–'}</td>
+                                                                                                </tr>
+                                                                                            ))}
+                                                                                        </tbody>
+                                                                                    </table>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* ── Right: Review + Link Wallet ── */}
+                                                                    <div>
+                                                                        <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>Add Review</h4>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                                            <input type="date" value={reviewForm.review_date} onChange={e => setReviewForm({ ...reviewForm, review_date: e.target.value })} />
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                                <span style={{ fontSize: 13, color: 'rgba(163,163,163,.8)' }}>Rating:</span>
+                                                                                {[1, 2, 3, 4, 5].map(n => (
+                                                                                    <span
+                                                                                        key={n}
+                                                                                        onClick={() => setReviewForm({ ...reviewForm, rating: n })}
+                                                                                        style={{ cursor: 'pointer', fontSize: 20, color: n <= reviewForm.rating ? '#f59e0b' : 'rgba(163,163,163,.3)' }}
+                                                                                    >★</span>
+                                                                                ))}
+                                                                            </div>
+                                                                            <input type="text" placeholder="Comment" value={reviewForm.comment} onChange={e => setReviewForm({ ...reviewForm, comment: e.target.value })} />
+                                                                            <input type="text" placeholder="Reviewer name" value={reviewForm.reviewer_name} onChange={e => setReviewForm({ ...reviewForm, reviewer_name: e.target.value })} />
+                                                                            <button className="btn btn-primary" style={{ padding: '8px 16px', fontSize: 13 }} onClick={() => handleAddReview(w.id)}>
+                                                                                Submit Review
+                                                                            </button>
+                                                                        </div>
+
+                                                                        {/* Review history */}
+                                                                        {workerReviews.length > 0 && (
+                                                                            <div style={{ marginTop: 16 }}>
+                                                                                <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'rgba(163,163,163,.8)' }}>
+                                                                                    Reviews ({workerReviews.length})
+                                                                                </h4>
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 200, overflowY: 'auto' }}>
+                                                                                    {workerReviews.map(r => (
+                                                                                        <div key={r.id} style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', fontSize: 13 }}>
+                                                                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                                                                <span style={{ color: '#f59e0b' }}>{renderStars(r.rating)}</span>
+                                                                                                <span style={{ color: 'rgba(163,163,163,.5)', fontSize: 12 }}>{r.review_date}</span>
+                                                                                            </div>
+                                                                                            {r.comment && <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,.7)' }}>&ldquo;{r.comment}&rdquo;</p>}
+                                                                                            {r.reviewer_name && <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(163,163,163,.5)' }}>— {r.reviewer_name}</p>}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Link Wallet */}
+                                                                        {!w.wallet_address && (
+                                                                            <div style={{ marginTop: 20, padding: 16, borderRadius: 8, border: '1px dashed rgba(167,139,250,.3)', background: 'rgba(167,139,250,.04)' }}>
+                                                                                <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#a78bfa' }}>Link Wallet</h4>
+                                                                                <div style={{ display: 'flex', gap: 8 }}>
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        placeholder="0x..."
+                                                                                        value={linkWalletInput}
+                                                                                        onChange={e => setLinkWalletInput(e.target.value)}
+                                                                                        style={{ flex: 1, fontSize: 13 }}
+                                                                                    />
+                                                                                    <button className="btn btn-primary" style={{ padding: '8px 16px', fontSize: 13 }} onClick={() => handleLinkWallet(w.id)}>
+                                                                                        Link
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </>
                         )}
                     </>
                 )}
