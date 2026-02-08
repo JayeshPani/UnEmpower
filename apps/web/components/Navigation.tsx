@@ -53,6 +53,12 @@ export function Navigation() {
         >
           Loan
         </Link>
+        <Link
+          href="/manager"
+          className={`synapse-nav-link ${isActive('/manager') ? 'active' : ''}`}
+        >
+          Manager
+        </Link>
       </div>
 
       <div className="synapse-nav-cta">
@@ -73,6 +79,7 @@ export function Navigation() {
           </div>
         ) : (
           <button
+            id="connect-wallet-btn"
             type="button"
             className="synapse-nav-connect"
             onClick={() => {

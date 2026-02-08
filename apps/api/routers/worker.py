@@ -119,8 +119,14 @@ def get_worker_summary(
     seven_days_ago = today - timedelta(days=7)
     thirty_days_ago = today - timedelta(days=30)
     
-    hours_7d = sum(s.hours_worked for s in shifts if s.date >= seven_days_ago)
-    hours_30d = sum(s.hours_worked for s in shifts if s.date >= thirty_days_ago)
+    def _shift_date(s) -> date:
+        """Ensure shift date is a date object (handles string from DB)."""
+        if isinstance(s.date, str):
+            return date.fromisoformat(s.date)
+        return s.date
+    
+    hours_7d = sum(s.hours_worked for s in shifts if _shift_date(s) >= seven_days_ago)
+    hours_30d = sum(s.hours_worked for s in shifts if _shift_date(s) >= thirty_days_ago)
     
     # Get reviews
     reviews = db.query(PerformanceReview).filter(

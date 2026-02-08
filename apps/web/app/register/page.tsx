@@ -111,6 +111,7 @@ export default function RegisterPage() {
                                 </div>
 
                                 <button
+                                    id="register-btn"
                                     className="btn btn-primary"
                                     style={{ width: '100%' }}
                                     onClick={handleRegister}

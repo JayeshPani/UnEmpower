@@ -61,6 +61,12 @@ class Settings(BaseSettings):
         description="Bearer token for manager API authentication"
     )
 
+    # === Groq Chatbot ===
+    GROQ_API_KEY: str = Field(
+        default="",
+        description="Groq API key for chatbot LLM"
+    )
+
     @field_validator("CHAIN_ID", mode="before")
     @classmethod
     def parse_chain_id(cls, v):

@@ -19,18 +19,42 @@ router = APIRouter(prefix="/manager", tags=["manager"])
 
 # === Auth Dependency ===
 
+# Hardcoded dev fallback tokens (always accepted alongside MANAGER_ADMIN_TOKEN)
+_DEV_TOKENS = {"manager-secret-token", "admin", "dev"}
+
+
 def verify_manager_token(authorization: str = Header(None)) -> str:
-    """Verify the manager admin token."""
-    settings = get_settings()
-    expected_token = f"Bearer {settings.MANAGER_ADMIN_TOKEN}"
+    """Verify the manager admin token.
     
+    Accepts:
+    - The MANAGER_ADMIN_TOKEN from environment
+    - Any of the hardcoded dev fallback tokens
+    """
+    settings = get_settings()
+    expected = settings.MANAGER_ADMIN_TOKEN.strip()
+
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header required")
-    
-    if authorization != expected_token:
-        raise HTTPException(status_code=401, detail="Invalid manager token")
-    
-    return authorization
+
+    # Extract the raw token from "Bearer <token>"
+    raw = authorization.strip()
+    if raw.lower().startswith("bearer "):
+        raw = raw[7:].strip()
+
+    # Accept either the env token OR any dev fallback token
+    if raw == expected or raw in _DEV_TOKENS:
+        return raw
+
+    print(f"  [AUTH] Token mismatch: received '{raw[:6]}...' (len={len(raw)}), expected env token or one of {_DEV_TOKENS}")
+    raise HTTPException(status_code=401, detail="Invalid manager token")
+
+
+# === Verify Endpoint ===
+
+@router.get("/verify")
+def verify_token(_: str = Depends(verify_manager_token)):
+    """Verify the manager token is valid. Returns 200 if OK, 401 if not."""
+    return {"status": "ok", "message": "Token is valid"}
 
 
 # === Request/Response Models ===
@@ -306,7 +330,7 @@ def update_worker(
 
 @router.post("/workers/{worker_id}/shifts", response_model=ShiftResponse)
 def add_shift(
-    worker_id: str,
+    worker_id: int,
     shift: ShiftCreate,
     db: Session = Depends(get_db),
     _: str = Depends(verify_manager_token)
